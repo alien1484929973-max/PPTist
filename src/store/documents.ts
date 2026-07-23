@@ -230,7 +230,16 @@ export const useDocumentsStore = defineStore('documents', {
 
       const documentId = this.activeDocumentId
       const revision = this.activeRevision
-      const content = serializePresentation()
+      let content: ReturnType<typeof serializePresentation>
+      try {
+        content = serializePresentation()
+      }
+      catch {
+        this.dirty = true
+        this.saveStatus = 'error'
+        this.error = '文稿数据暂时无法序列化，请先导出 JSON 备份后刷新页面'
+        return false
+      }
       this.dirty = false
       this.saveStatus = 'saving'
 
