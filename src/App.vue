@@ -57,10 +57,6 @@ window.addEventListener('beforeunload', event => {
   }
 })
 
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden' && dirty.value) void documentsStore.saveNow()
-})
-
 // 应用注销时向 localStorage 中记录下本次 indexedDB 的数据库ID，用于之后清除数据库
 window.addEventListener('beforeunload', () => {
   const discardedDB = localStorage.getItem(LOCALSTORAGE_KEY_DISCARDED_DB)

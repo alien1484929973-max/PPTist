@@ -20,17 +20,9 @@ interface DocumentsState {
   suspendTracking: boolean
 }
 
-let autoSaveTimer: ReturnType<typeof setTimeout> | null = null
-let maxSaveTimer: ReturnType<typeof setTimeout> | null = null
-let autoSaveStarted = false
+let changeTrackingStarted = false
+let ignoreChangeTracking = 0
 let savePromise: Promise<boolean> | null = null
-
-const clearSaveTimers = () => {
-  if (autoSaveTimer) clearTimeout(autoSaveTimer)
-  if (maxSaveTimer) clearTimeout(maxSaveTimer)
-  autoSaveTimer = null
-  maxSaveTimer = null
-}
 
 export const useDocumentsStore = defineStore('documents', {
   state: (): DocumentsState => ({
@@ -101,9 +93,8 @@ export const useDocumentsStore = defineStore('documents', {
     },
 
     async logout() {
-      if (!await this.flushSave()) return false
+      if (!this.canLeaveCurrentDocument()) return false
       await cloudApi.logout().catch(() => undefined)
-      clearSaveTimers()
       this.$reset()
       this.authStatus = 'unauthenticated'
       useSlidesStore().setSlides([])
@@ -111,7 +102,7 @@ export const useDocumentsStore = defineStore('documents', {
     },
 
     async initializeLibrary() {
-      this.startAutoSave()
+      this.startChangeTracking()
       await this.refreshDocuments()
 
       const queryId = new URLSearchParams(window.location.search).get('doc') || ''
@@ -123,12 +114,29 @@ export const useDocumentsStore = defineStore('documents', {
       else await this.createDocument('未命名演示文稿')
     },
 
-    startAutoSave() {
-      if (autoSaveStarted) return
-      autoSaveStarted = true
+    startChangeTracking() {
+      if (changeTrackingStarted) return
+      changeTrackingStarted = true
       const slidesStore = useSlidesStore()
+
+      // Current-page navigation and template catalogue updates are editor UI
+      // state, not presentation content. Ignoring them prevents a simple slide
+      // switch from showing the document as modified.
+      slidesStore.$onAction(({ name, after, onError }) => {
+        if (name !== 'updateSlideIndex' && name !== 'setTemplates') return
+        ignoreChangeTracking += 1
+        let released = false
+        const release = () => {
+          if (released) return
+          released = true
+          ignoreChangeTracking = Math.max(0, ignoreChangeTracking - 1)
+        }
+        after(release)
+        onError(release)
+      }, true)
+
       slidesStore.$subscribe(() => {
-        if (this.suspendTracking || !this.activeDocumentId || this.authStatus !== 'authenticated') return
+        if (ignoreChangeTracking || this.suspendTracking || !this.activeDocumentId || this.authStatus !== 'authenticated') return
         this.markDirty()
       }, { detached: true, flush: 'sync' })
     },
@@ -137,10 +145,18 @@ export const useDocumentsStore = defineStore('documents', {
       this.dirty = true
       if (this.saveStatus === 'conflict') return
       if (this.saveStatus !== 'saving') this.saveStatus = 'dirty'
+    },
 
-      if (autoSaveTimer) clearTimeout(autoSaveTimer)
-      autoSaveTimer = setTimeout(() => void this.saveNow(), 1200)
-      if (!maxSaveTimer) maxSaveTimer = setTimeout(() => void this.saveNow(), 8000)
+    canLeaveCurrentDocument() {
+      if (savePromise || this.saveStatus === 'saving') {
+        this.error = '文稿正在保存，请等待保存完成后再切换'
+        return false
+      }
+      if (this.dirty || this.saveStatus === 'error' || this.saveStatus === 'conflict') {
+        this.error = '当前文稿有未保存修改，请先点击“保存”再继续操作'
+        return false
+      }
+      return true
     },
 
     async refreshDocuments() {
@@ -186,7 +202,7 @@ export const useDocumentsStore = defineStore('documents', {
 
     async openDocument(id: string, options: { skipSave?: boolean } = {}) {
       if (id === this.activeDocumentId && !options.skipSave) return true
-      if (!options.skipSave && !await this.flushSave()) return false
+      if (!options.skipSave && !this.canLeaveCurrentDocument()) return false
 
       this.loading = true
       this.error = ''
@@ -205,7 +221,7 @@ export const useDocumentsStore = defineStore('documents', {
     },
 
     async createDocument(title = '未命名演示文稿') {
-      if (!await this.flushSave()) return false
+      if (!this.canLeaveCurrentDocument()) return false
       this.loading = true
       try {
         const content = createBlankPresentation(title)
@@ -223,7 +239,6 @@ export const useDocumentsStore = defineStore('documents', {
     },
 
     saveNow() {
-      clearSaveTimers()
       if (savePromise) return savePromise
       if (!this.activeDocumentId || !this.dirty) return true
       if (this.saveStatus === 'conflict') return false
@@ -250,6 +265,7 @@ export const useDocumentsStore = defineStore('documents', {
             this.activeRevision = document.revision
             this.lastSavedAt = document.updatedAt
             this.updateSummary(document)
+            this.error = ''
             this.saveStatus = this.dirty ? 'dirty' : 'saved'
             if (this.dirty) this.markDirty()
           }
@@ -276,13 +292,6 @@ export const useDocumentsStore = defineStore('documents', {
       return savePromise
     },
 
-    async flushSave() {
-      clearSaveTimers()
-      if (savePromise) await savePromise
-      if (this.dirty) return this.saveNow()
-      return this.saveStatus !== 'conflict' && this.saveStatus !== 'error'
-    },
-
     retrySave() {
       if (this.saveStatus === 'conflict') return false
       this.saveStatus = 'dirty'
@@ -299,7 +308,7 @@ export const useDocumentsStore = defineStore('documents', {
     async renameDocument(id: string, title: string) {
       const normalized = title.trim()
       if (!normalized) return false
-      if (id === this.activeDocumentId && !await this.flushSave()) return false
+      if (id === this.activeDocumentId && !this.canLeaveCurrentDocument()) return false
 
       try {
         const revision = id === this.activeDocumentId
@@ -326,7 +335,7 @@ export const useDocumentsStore = defineStore('documents', {
     },
 
     async duplicateDocument(id: string) {
-      if (id === this.activeDocumentId && !await this.flushSave()) return false
+      if (id === this.activeDocumentId && !this.canLeaveCurrentDocument()) return false
       try {
         const { document } = await cloudApi.duplicateDocument(id)
         this.updateSummary(document)
