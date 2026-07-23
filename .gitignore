@@ -28,3 +28,8 @@ coverage
 *.sw?
 
 *.tsbuildinfo
+
+# PPTist Cloud runtime data and secrets
+/server/data/
+/server/uploads/
+/server/*.env

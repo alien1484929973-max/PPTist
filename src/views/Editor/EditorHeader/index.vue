@@ -51,10 +51,14 @@
           <PopoverMenuItem class="popover-menu-item" @click="goLink('https://github.com/pipipi-pikachu/PPTist/issues')"><i-icon-park-outline:comment class="icon" /> 意见反馈</PopoverMenuItem>
           <PopoverMenuItem class="popover-menu-item" @click="goLink('https://github.com/pipipi-pikachu/PPTist/blob/master/doc/Q&A.md')"><i-icon-park-outline:helpcenter class="icon" /> 常见问题</PopoverMenuItem>
           <Divider :margin="10" />
-          <div class="statement">注：本站仅作测试/演示，不提供任何形式的服务</div>
+          <div class="statement">文稿将自动保存到你的个人云端</div>
         </template>
         <div class="menu-item"><i-icon-park-outline:hamburger-button class="icon" /></div>
       </Popover>
+
+      <div class="menu-item cloud-library" v-tooltip="'我的文稿'" @click="documentManagerVisible = true">
+        <i-icon-park-outline:folder-open class="icon" />
+      </div>
 
       <div class="title">
         <Input 
@@ -74,6 +78,16 @@
     </div>
 
     <div class="right">
+      <div class="save-state" :class="saveStatus" :title="lastSavedAt ? `最近保存：${lastSavedAt}` : ''">
+        {{ saveLabel }}
+      </div>
+      <div
+        class="save-button"
+        :class="{ disabled: (!dirty && saveStatus !== 'error') || saveStatus === 'saving' }"
+        @click="manualSave()"
+      >
+        <i-icon-park-outline:save class="icon" /> 保存
+      </div>
       <div class="group-menu-item">
         <div class="menu-item" v-tooltip="'幻灯片放映（F5）'" @click="enterScreening()">
           <i-icon-park-outline:ppt class="icon" />
@@ -92,7 +106,7 @@
       <div class="menu-item" v-tooltip="'导出'" @click="setDialogForExport('pptx')">
         <i-icon-park-outline:download class="icon" />
       </div>
-      <a class="github-link" v-tooltip="'Copyright © 2020-PRESENT pipipi-pikachu'" href="https://github.com/pipipi-pikachu/PPTist" target="_blank">
+      <a class="github-link" v-tooltip="'查看当前运行版本源码'" href="https://github.com/alien1484929973-max/PPTist" target="_blank">
         <div class="menu-item"><i-icon-park-outline:github class="icon" /></div>
       </a>
     </div>
@@ -107,13 +121,14 @@
     </Drawer>
 
     <FullscreenSpin :loading="exporting" tip="正在导入..." />
+    <DocumentManager v-model:visible="documentManagerVisible" />
   </div>
 </template>
 
 <script lang="ts" setup>
 import { nextTick, ref, useTemplateRef } from 'vue'
 import { storeToRefs } from 'pinia'
-import { useMainStore, useSlidesStore } from '@/store'
+import { useDocumentsStore, useMainStore, useSlidesStore } from '@/store'
 import useScreening from '@/hooks/useScreening'
 import useImport from '@/hooks/useImport'
 import useSlideHandler from '@/hooks/useSlideHandler'
@@ -127,10 +142,14 @@ import Input from '@/components/Input.vue'
 import Popover from '@/components/Popover.vue'
 import PopoverMenuItem from '@/components/PopoverMenuItem.vue'
 import Divider from '@/components/Divider.vue'
+import DocumentManager from '@/views/Cloud/DocumentManager.vue'
+import message from '@/utils/message'
 
 const mainStore = useMainStore()
 const slidesStore = useSlidesStore()
+const documentsStore = useDocumentsStore()
 const { title } = storeToRefs(slidesStore)
+const { saveLabel, saveStatus, dirty, lastSavedAt } = storeToRefs(documentsStore)
 const { enterScreening, enterScreeningFromStart } = useScreening()
 const { importSpecificFile, importPPTXFile, importJSON, exporting } = useImport()
 const { resetSlides } = useSlideHandler()
@@ -140,6 +159,7 @@ const hotkeyDrawerVisible = ref(false)
 const editingTitle = ref(false)
 const titleValue = ref('')
 const titleInputRef = useTemplateRef<InstanceType<typeof Input>>('titleInputRef')
+const documentManagerVisible = ref(false)
 
 const startEditTitle = () => {
   titleValue.value = title.value
@@ -168,6 +188,18 @@ const openMarkupPanel = () => {
 
 const openAIPPTDialog = () => {
   mainStore.setAIPPTDialogState(true)
+}
+
+const manualSave = async () => {
+  if (saveStatus.value === 'conflict') {
+    if (window.confirm('云端文稿已经更新。是否放弃当前未保存修改并重新加载？')) {
+      await documentsStore.reloadActiveDocument()
+    }
+    return
+  }
+  if ((!dirty.value && saveStatus.value !== 'error') || saveStatus.value === 'saving') return
+  if (await documentsStore.retrySave()) message.success('文稿已保存到云端')
+  else message.error(documentsStore.error || '保存失败')
 }
 </script>
 
@@ -213,6 +245,48 @@ const openAIPPTDialog = () => {
 
   &:hover {
     background-color: #f1f1f1;
+  }
+}
+.cloud-library {
+  padding: 0 7px;
+}
+.save-state {
+  min-width: 48px;
+  margin-right: 7px;
+  color: #8a8f99;
+  font-size: 11px;
+  text-align: right;
+
+  &.dirty, &.error, &.conflict {
+    color: #d97706;
+  }
+  &.error, &.conflict {
+    color: #dc2626;
+  }
+}
+.save-button {
+  height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 5px;
+  padding: 0 10px;
+  border-radius: $borderRadius;
+  color: #fff;
+  background: $themeColor;
+  font-size: 12px;
+  cursor: pointer;
+
+  .icon {
+    font-size: 15px;
+  }
+  &:hover:not(.disabled) {
+    background: $themeHoverColor;
+  }
+  &.disabled {
+    color: #a8adb5;
+    background: #eef0f3;
+    cursor: default;
   }
 }
 .popover-menu-item {

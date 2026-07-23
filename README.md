@@ -15,6 +15,8 @@
 # 🎨 PPTist
 **PowerPoint-ist（/'pauəpɔintist/）**, A web-based presentation (slideshow) application. This application replicates most of the commonly used features of Microsoft Office PowerPoint. It supports various essential element types such as text, images, shapes, lines, charts, tables, videos, audio, and formulas. You can edit and present slides directly in a web browser.
 
+> This fork adds single-user authentication, a SQLite-backed cloud document library, multi-document management, autosave, and revision conflict protection. See [Cloud Storage](./doc/CloudStorage.md) for deployment and data-model details.
+
 **Try it online👉：[https://pipipi-pikachu.github.io/PPTist/](https://pipipi-pikachu.github.io/PPTist/)**
 
 > China Mirrors (Synchronized Regularly): [Gitee](https://gitee.com/pptist/PPTist)、[GitCode](https://gitcode.com/pipipi-pikachu/PPTist)

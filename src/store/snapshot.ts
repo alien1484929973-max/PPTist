@@ -44,6 +44,16 @@ export const useSnapshotStore = defineStore('snapshot', {
       this.setSnapshotCursor(0)
       this.setSnapshotLength(1)
     },
+
+    async resetSnapshotDatabase() {
+      await Promise.all([
+        db.snapshots.clear(),
+        db.writingBoardImgs.clear(),
+      ])
+      this.setSnapshotCursor(-1)
+      this.setSnapshotLength(0)
+      await this.initSnapshotDatabase()
+    },
   
     async addSnapshot() {
       const slidesStore = useSlidesStore()

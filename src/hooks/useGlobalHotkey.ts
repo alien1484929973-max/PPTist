@@ -1,6 +1,6 @@
 import { onMounted, onUnmounted } from 'vue'
 import { storeToRefs } from 'pinia'
-import { useMainStore, useSlidesStore, useKeyboardStore } from '@/store'
+import { useMainStore, useSlidesStore, useKeyboardStore, useDocumentsStore } from '@/store'
 import { ElementOrderCommands } from '@/types/edit'
 import { KEYS } from '@/configs/hotkey'
 
@@ -19,6 +19,7 @@ import useScaleCanvas from './useScaleCanvas'
 export default () => {
   const mainStore = useMainStore()
   const keyboardStore = useKeyboardStore()
+  const documentsStore = useDocumentsStore()
   const {
     activeElementIdList,
     disableHotkeys,
@@ -139,6 +140,11 @@ export default () => {
     if (ctrlOrMetaKeyActive && key === KEYS.P) {
       e.preventDefault()
       mainStore.setDialogForExport('pdf')
+      return
+    }
+    if (ctrlOrMetaKeyActive && key === KEYS.S) {
+      e.preventDefault()
+      void documentsStore.saveNow()
       return
     }
     if (shiftKey && key === KEYS.F5) {

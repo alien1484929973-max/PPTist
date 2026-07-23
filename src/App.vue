@@ -1,42 +1,40 @@
 <template>
-  <template v-if="slides.length">
+  <LoginView v-if="!isAudienceMode && authStatus === 'unauthenticated'" />
+  <template v-else-if="slides.length">
     <Screen v-if="screening" />
     <Editor v-else-if="_isPC" />
     <Mobile v-else />
   </template>
-  <FullscreenSpin tip="数据初始化中，请稍等 ..." v-else  loading :mask="false" />
+  <FullscreenSpin tip="正在加载云文稿 ..." v-else loading :mask="false" />
 </template>
 
 <script lang="ts" setup>
 import { onMounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import { nanoid } from 'nanoid'
-import { useScreenStore, useMainStore, useSnapshotStore, useSlidesStore } from '@/store'
+import { useScreenStore, useMainStore, useSlidesStore, useDocumentsStore } from '@/store'
 import { LOCALSTORAGE_KEY_DISCARDED_DB } from '@/configs/storage'
 import { deleteDiscardedDB } from '@/utils/database'
 import { isPC } from '@/utils/common'
-import api from '@/services'
 
 import Editor from './views/Editor/index.vue'
 import Screen from './views/Screen/index.vue'
 import Mobile from './views/Mobile/index.vue'
+import LoginView from './views/Cloud/LoginView.vue'
 import FullscreenSpin from '@/components/FullscreenSpin.vue'
 
 const _isPC = isPC()
 
 const mainStore = useMainStore()
 const slidesStore = useSlidesStore()
-const snapshotStore = useSnapshotStore()
 const screenStore = useScreenStore()
+const documentsStore = useDocumentsStore()
 const { databaseId } = storeToRefs(mainStore)
 const { slides } = storeToRefs(slidesStore)
 const { screening } = storeToRefs(screenStore)
+const { authStatus, dirty, saveStatus } = storeToRefs(documentsStore)
 
 const isAudienceMode = new URLSearchParams(window.location.search).get('mode') === 'audience'
-
-if (import.meta.env.MODE !== 'development') {
-  window.onbeforeunload = () => false
-}
 
 onMounted(async () => {
   if (isAudienceMode) {
@@ -47,12 +45,20 @@ onMounted(async () => {
     screenStore.setScreening(true)
   }
   else {
-    const slides = await api.getMockData('slides')
-    slidesStore.setSlides(slides)
-
     await deleteDiscardedDB()
-    snapshotStore.initSnapshotDatabase()
+    await documentsStore.initialize()
   }
+})
+
+window.addEventListener('beforeunload', event => {
+  if (!isAudienceMode && (dirty.value || saveStatus.value === 'saving')) {
+    event.preventDefault()
+    event.returnValue = ''
+  }
+})
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden' && dirty.value) void documentsStore.saveNow()
 })
 
 // 应用注销时向 localStorage 中记录下本次 indexedDB 的数据库ID，用于之后清除数据库

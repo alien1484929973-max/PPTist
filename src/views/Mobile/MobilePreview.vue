@@ -10,6 +10,8 @@
       </div>
     </div>
     <div class="menu">
+      <div class="menu-item" @click="documentManagerVisible = true"><i-icon-park-outline:folder-open class="icon" /> 文稿</div>
+      <Divider type="vertical" style="height: 30px;" />
       <div class="menu-item" @click="changeMode('editor')"><i-icon-park-outline:edit class="icon" /> 编辑</div>
       <Divider type="vertical" style="height: 30px;" />
       <div class="menu-item" @click="changeMode('player')"><i-icon-park-outline:full-screen-play class="icon" /> 播放</div>
@@ -29,6 +31,8 @@
   >
     <AIPPTDialog />
   </Modal>
+
+  <DocumentManager v-model:visible="documentManagerVisible" :width="width" />
 </template>
 
 <script lang="ts" setup>
@@ -42,6 +46,7 @@ import ThumbnailSlide from '@/views/components/ThumbnailSlide/index.vue'
 import Divider from '@/components/Divider.vue'
 import Modal from '@/components/Modal.vue'
 import AIPPTDialog from '../Editor/AIPPTDialog.vue'
+import DocumentManager from '@/views/Cloud/DocumentManager.vue'
 
 defineProps<{
   changeMode: (mode: Mode) => void
@@ -58,6 +63,7 @@ const closeAIPPTDialog = () => mainStore.setAIPPTDialogState(false)
 const mobileRef = useTemplateRef<HTMLElement>('mobileRef')
 const screenWidth = ref(0)
 const width = ref(400)
+const documentManagerVisible = ref(false)
 
 onMounted(() => {
   if (!mobileRef.value) return
@@ -96,7 +102,7 @@ onMounted(() => {
   align-items: center;
 
   .menu-item {
-    width: 50%;
+    flex: 1;
     height: 100%;
     display: flex;
     justify-content: center;

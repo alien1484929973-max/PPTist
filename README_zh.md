@@ -15,6 +15,8 @@
 # 🎨 PPTist
 **PowerPoint-ist（/'pauəpɔintist/）**，一个基于 Web 的在线演示文稿（幻灯片）应用，还原了大部分 Office PowerPoint 常用功能，支持 文字、图片、形状、线条、图表、表格、视频、音频、公式 几种最常用的元素类型，可以在 Web 浏览器中编辑/演示幻灯片。
 
+> 当前 Fork 增加了单用户登录、SQLite 云文稿库、多文稿管理、自动保存和版本冲突保护。部署与数据结构说明见 [云文稿功能](./doc/CloudStorage.md)。
+
 **在线体验地址👉：[https://pipipi-pikachu.github.io/PPTist/](https://pipipi-pikachu.github.io/PPTist/)**
 
 > 国内镜像（定期同步）：[Gitee](https://gitee.com/pptist/PPTist)、[GitCode](https://gitcode.com/pipipi-pikachu/PPTist)
