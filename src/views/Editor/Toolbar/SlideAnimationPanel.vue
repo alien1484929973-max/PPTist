@@ -21,6 +21,7 @@ import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useSlidesStore } from '@/store'
 import type { TurningMode } from '@/types/slides'
+import type { SlideTransition } from '@pptist/presentation-core'
 import { SLIDE_ANIMATIONS } from '@/configs/animation'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 import message from '@/utils/message'
@@ -35,19 +36,38 @@ const animations = SLIDE_ANIMATIONS
 
 const { addHistorySnapshot } = useHistorySnapshot()
 
+const transitionForMode = (mode: TurningMode): SlideTransition | undefined => {
+  if (mode !== 'morph') return undefined
+  if (currentSlide.value.transition?.type === 'morph') return currentSlide.value.transition
+  return {
+    type: 'morph',
+    duration: 700,
+    morph: { mode: 'byObject' },
+    source: 'editor',
+  }
+}
+
 // 修改播放时的切换页面方式
 const updateTurningMode = (mode: TurningMode) => {
   if (mode === currentTurningMode.value) return
-  slidesStore.updateSlide({ turningMode: mode })
+  slidesStore.updateSlide({
+    turningMode: mode,
+    transition: transitionForMode(mode),
+  })
   addHistorySnapshot()
 }
 
 // 将当前页的切换页面方式应用到全部页面
 const applyAllSlide = () => {
+  const transition = currentSlide.value.transition
   const newSlides = slides.value.map(slide => {
     return {
       ...slide,
       turningMode: currentSlide.value.turningMode,
+      transition: transition ? {
+        ...transition,
+        morph: transition.morph ? { ...transition.morph } : undefined,
+      } : undefined,
     }
   })
   slidesStore.setSlides(newSlides)

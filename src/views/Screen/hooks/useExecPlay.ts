@@ -81,18 +81,33 @@ export default () => {
       
       // 执行动画前先清除原有的动画状态（如果有）
       elRef.style.removeProperty('--animate-duration')
+      elRef.style.removeProperty('animation-delay')
+      elRef.style.removeProperty('animation-iteration-count')
+      elRef.style.removeProperty('animation-direction')
+      elRef.style.removeProperty('animation-timing-function')
       for (const classname of elRef.classList) {
         if (classname.indexOf(ANIMATION_CLASS_PREFIX) !== -1) elRef.classList.remove(classname, `${ANIMATION_CLASS_PREFIX}animated`)
       }
       
       // 执行动画
       elRef.style.setProperty('--animate-duration', `${animation.duration}ms`)
+      if (animation.delay) elRef.style.setProperty('animation-delay', `${animation.delay}ms`)
+      if (animation.repeatCount && animation.repeatCount > 1 && Number.isFinite(animation.repeatCount)) {
+        const iterations = Math.min(animation.repeatCount * (animation.autoReverse ? 2 : 1), 20)
+        elRef.style.setProperty('animation-iteration-count', `${iterations}`)
+      }
+      if (animation.autoReverse) elRef.style.setProperty('animation-direction', 'alternate')
+      if (animation.easing) elRef.style.setProperty('animation-timing-function', animation.easing)
       elRef.classList.add(animationName, `${ANIMATION_CLASS_PREFIX}animated`)
 
       // 执行动画结束，将“退场”以外的动画状态清除
       const handleAnimationEnd = () => {
         if (animation.type !== 'out') {
           elRef.style.removeProperty('--animate-duration')
+          elRef.style.removeProperty('animation-delay')
+          elRef.style.removeProperty('animation-iteration-count')
+          elRef.style.removeProperty('animation-direction')
+          elRef.style.removeProperty('animation-timing-function')
           elRef.classList.remove(animationName, `${ANIMATION_CLASS_PREFIX}animated`)
         }
 
@@ -104,6 +119,12 @@ export default () => {
         }
       }
       elRef.addEventListener('animationend', handleAnimationEnd, { once: true })
+    }
+
+    // Broken or unsupported targets must not leave the whole presentation locked.
+    if (endAnimationCount === animations.length) {
+      inAnimation.value = false
+      if (autoNext) runAnimation()
     }
   }
 
@@ -142,6 +163,10 @@ export default () => {
       if (!elRef) continue
       
       elRef.style.removeProperty('--animate-duration')
+      elRef.style.removeProperty('animation-delay')
+      elRef.style.removeProperty('animation-iteration-count')
+      elRef.style.removeProperty('animation-direction')
+      elRef.style.removeProperty('animation-timing-function')
       for (const classname of elRef.classList) {
         if (classname.indexOf(ANIMATION_CLASS_PREFIX) !== -1) elRef.classList.remove(classname, `${ANIMATION_CLASS_PREFIX}animated`)
       }
@@ -219,7 +244,7 @@ export default () => {
   const autoPlay = () => {
     closeAutoPlay()
     message.success('开始自动放映')
-    autoPlayTimer.value = setInterval(execNext, autoPlayInterval.value)
+    autoPlayTimer.value = window.setInterval(execNext, autoPlayInterval.value)
   }
 
   const setAutoPlayInterval = (interval: number) => {

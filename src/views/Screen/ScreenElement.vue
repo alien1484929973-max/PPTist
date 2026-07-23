@@ -3,6 +3,7 @@
     class="screen-element"
     :class="{ 'link': elementInfo.link }"
     :id="`screen-element-${elementInfo.id}`"
+    :data-element-id="elementInfo.id"
     :style="{
       zIndex: elementIndex,
       color: theme.fontColor,

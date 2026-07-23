@@ -1,4 +1,8 @@
 import { nanoid } from 'nanoid'
+import {
+  CURRENT_PRESENTATION_SCHEMA_VERSION,
+  migratePresentationDocument,
+} from '@pptist/presentation-core'
 import type { PresentationContent } from '@/types/cloud'
 import type { SlideTheme } from '@/types/slides'
 import { useSlidesStore } from '@/store/slides'
@@ -26,7 +30,7 @@ const defaultTheme: SlideTheme = {
 const cloneSerializable = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
 
 export const createBlankPresentation = (title = '未命名演示文稿'): PresentationContent => ({
-  schemaVersion: 1,
+  schemaVersion: CURRENT_PRESENTATION_SCHEMA_VERSION,
   title,
   width: 1000,
   height: 562.5,
@@ -45,7 +49,7 @@ export const createBlankPresentation = (title = '未命名演示文稿'): Presen
 export const serializePresentation = (): PresentationContent => {
   const slidesStore = useSlidesStore()
   return cloneSerializable({
-    schemaVersion: 1,
+    schemaVersion: CURRENT_PRESENTATION_SCHEMA_VERSION,
     title: slidesStore.title,
     width: slidesStore.viewportSize,
     height: slidesStore.viewportSize * slidesStore.viewportRatio,
@@ -55,7 +59,18 @@ export const serializePresentation = (): PresentationContent => {
   })
 }
 
-export const applyPresentation = (content: PresentationContent) => {
+export const migratePresentation = (input: unknown): PresentationContent => {
+  return cloneSerializable(migratePresentationDocument(input, {
+    title: '未命名演示文稿',
+    width: 1000,
+    height: 562.5,
+    theme: defaultTheme,
+    slides: createBlankPresentation().slides,
+  }))
+}
+
+export const applyPresentation = (input: PresentationContent | unknown) => {
+  const content = migratePresentation(input)
   const slidesStore = useSlidesStore()
   const width = Number(content.width) || 1000
   const height = Number(content.height) || 562.5

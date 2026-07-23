@@ -1,19 +1,12 @@
 import type { Slide, SlideTheme } from './slides'
+import type { PresentationDocument } from '@pptist/presentation-core'
 
 export interface CloudUser {
   id: number
   username: string
 }
 
-export interface PresentationContent {
-  schemaVersion: 1
-  title: string
-  width: number
-  height: number
-  theme: SlideTheme
-  slides: Slide[]
-  lastSlideIndex: number
-}
+export type PresentationContent = PresentationDocument<Slide, SlideTheme>
 
 export interface CloudDocumentSummary {
   id: string

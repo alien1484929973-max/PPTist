@@ -54,11 +54,13 @@ provide(injectKeySlideId, slideId)
   left: 0;
   transform-origin: 0 0;
   overflow: hidden;
+  isolation: isolate;
 }
 .background {
   width: 100%;
   height: 100%;
   background-position: center;
   position: absolute;
+  z-index: -1;
 }
 </style>

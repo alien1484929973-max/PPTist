@@ -3,6 +3,11 @@ import { storeToRefs } from 'pinia'
 import { parse, type Shape, type Element, type ChartItem, type BaseElement } from 'pptxtojson'
 import { nanoid } from 'nanoid'
 import tinycolor from 'tinycolor2'
+import {
+  createLegacyPptAnimations,
+  parsePptxImportMetadata,
+  type SlideTransition,
+} from '@pptist/presentation-core'
 import { useSlidesStore } from '@/store'
 import { decrypt } from '@/utils/crypto'
 import { isFloatEqual } from '@/utils/common'
@@ -13,6 +18,12 @@ import useHistorySnapshot from './useHistorySnapshot'
 import message from '@/utils/message'
 import { getSvgPathRange, toPoints } from '@/utils/svgPathParser'
 import { loadGoogleFonts } from '@/utils/font'
+import {
+  applyImportedIdentity,
+  assignPptxElementSources,
+  transitionTurningMode,
+  type SourceAwareElement,
+} from '@/utils/pptxImport'
 import type {
   Slide,
   TableCellStyle,
@@ -27,6 +38,7 @@ import type {
   PPTTextElement,
   ChartOptions,
   Gradient,
+  PPTAnimation,
 } from '@/types/slides'
 
 const vAlignMap: Record<string, TextAlignVertical> = {
@@ -666,11 +678,17 @@ export default () => {
     reader.onload = async e => {
       let json = null
       try {
-        json = await parse(e.target!.result as ArrayBuffer, {
+        const arrayBuffer = e.target!.result as ArrayBuffer
+        // Read the lightweight OOXML metadata first instead of opening the same
+        // archive twice in parallel; large presentations otherwise have a much
+        // higher peak memory footprint.
+        const importMetadata = await parsePptxImportMetadata(arrayBuffer).catch(() => ({ slides: [] }))
+        const parsedPresentation = await parse(arrayBuffer, {
           imageMode: 'base64',
           videoMode: 'blob',
           audioMode: 'blob',
         })
+        json = { ...parsedPresentation, importMetadata }
       }
       catch {
         exporting.value = false
@@ -692,7 +710,10 @@ export default () => {
       slidesStore.setTheme({ themeColors: json.themeColors })
 
       const slides: Slide[] = []
-      for (const item of json.slides) {
+      for (let slideNumber = 0; slideNumber < json.slides.length; slideNumber++) {
+        const item = json.slides[slideNumber]
+        const importMetadata = json.importMetadata.slides[slideNumber]
+        if (importMetadata) assignPptxElementSources(item.elements, importMetadata.sourceElements)
         const { type, value } = item.fill
         let background: SlideBackground
         if (type === 'image') {
@@ -730,17 +751,27 @@ export default () => {
           }
         }
 
+        const transition: SlideTransition | undefined = importMetadata?.transition || (item.transition ? {
+          type: item.transition.type,
+          duration: item.transition.duration,
+          direction: item.transition.direction,
+          source: 'pptx',
+        } : undefined)
+
         const slide: Slide = {
           id: nanoid(10),
           elements: [],
           background,
           remark: item.note || '',
+          transition,
+          turningMode: transitionTurningMode(transition),
         }
 
         const parseElements = (elements: Element[]) => {
           const sortedElements = elements.sort((a, b) => a.order - b.order)
 
           for (const el of sortedElements) {
+            const firstAddedElementIndex = slide.elements.length
             let backstopSize = 1
 
             if (el.type === 'shape') {
@@ -1343,9 +1374,35 @@ export default () => {
               }))
               parseElements(elements)
             }
+
+            if (el.type !== 'group' && el.type !== 'diagram') {
+              for (let index = firstAddedElementIndex; index < slide.elements.length; index++) {
+                applyImportedIdentity(slide.elements[index], el as SourceAwareElement)
+              }
+            }
           }
         }
         parseElements([...item.elements, ...item.layoutElements])
+
+        if (importMetadata?.animationTimeline) {
+          const resolveElementId = (sourceShapeId: string) => {
+            return slide.elements.find(element => element.source?.shapeId === sourceShapeId)?.id
+          }
+          const timeline = importMetadata.animationTimeline
+          slide.animationTimeline = {
+            ...timeline,
+            animations: timeline.animations.map(animation => ({
+              ...animation,
+              target: {
+                ...animation.target,
+                elementId: animation.target.sourceShapeId
+                  ? resolveElementId(animation.target.sourceShapeId)
+                  : undefined,
+              },
+            })),
+          }
+          slide.animations = createLegacyPptAnimations(timeline, resolveElementId) as PPTAnimation[]
+        }
         slides.push(slide)
       }
 
@@ -1361,6 +1418,31 @@ export default () => {
         addHistorySnapshot()
       }
       else addSlidesFromData(slides)
+
+      const morphSlideCount = slides.filter(slide => slide.transition?.type === 'morph').length
+      const animationCount = slides.reduce((count, slide) => count + (slide.animationTimeline?.animations.length || 0), 0)
+      const unresolvedAnimationCount = slides.reduce((count, slide) => {
+        return count + (slide.animationTimeline?.animations.filter(animation => !animation.target.elementId).length || 0)
+      }, 0)
+      const approximateAnimationCount = slides.reduce((count, slide) => {
+        return count + (slide.animationTimeline?.animations.filter(animation => animation.effect.compatibility !== 'mapped').length || 0)
+      }, 0)
+      const textMorphCount = slides.filter(slide => {
+        const mode = slide.transition?.morph?.mode
+        return mode === 'byWord' || mode === 'byChar'
+      }).length
+      if (morphSlideCount || animationCount) {
+        message.success(`已导入 ${morphSlideCount} 页平滑效果、${animationCount} 个元素动画`)
+      }
+      if (unresolvedAnimationCount) {
+        message.warning(`${unresolvedAnimationCount} 个动画未能匹配元素，已保留原始动画信息`)
+      }
+      if (approximateAnimationCount) {
+        message.warning(`${approximateAnimationCount} 个复杂动画已保留原始信息，并采用近似或降级播放`)
+      }
+      if (textMorphCount) {
+        message.warning(`${textMorphCount} 页文字级平滑暂按对象级平滑播放`)
+      }
 
       exporting.value = false
     }

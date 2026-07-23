@@ -1,5 +1,5 @@
 <template>
-  <div class="screen-slide-list">
+  <div class="screen-slide-list" ref="slideListRef">
     <div 
       :class="[
         'slide-item', 
@@ -15,6 +15,10 @@
       ]"
       v-for="(slide, index) in slidesWithTurningMode" 
       :key="slide.id"
+      :data-slide-id="slide.id"
+      :style="{
+        transitionDuration: slide.transition?.duration ? `${slide.transition.duration}ms` : undefined,
+      }"
     >
       <div 
         class="slide-content" 
@@ -37,11 +41,12 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, provide } from 'vue'
+import { computed, provide, useTemplateRef } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useSlidesStore } from '@/store'
 import { injectKeySlideScale } from '@/types/injectKey'
 import useSlidesWithTurningMode from './hooks/useSlidesWithTurningMode'
+import useMorphTransition from './hooks/useMorphTransition'
 
 import ScreenSlide from './ScreenSlide.vue'
 
@@ -53,9 +58,11 @@ const props = defineProps<{
   manualExitFullscreen: () => void
 }>()
 
-const { slideIndex, viewportSize } = storeToRefs(useSlidesStore())
+const { slides, slideIndex, viewportSize } = storeToRefs(useSlidesStore())
+const slideListRef = useTemplateRef<HTMLElement>('slideListRef')
 
 const { slidesWithTurningMode } = useSlidesWithTurningMode()
+useMorphTransition(slideListRef, slides, slideIndex)
 
 const scale = computed(() => props.slideWidth / viewportSize.value)
 provide(injectKeySlideScale, scale)
@@ -82,6 +89,12 @@ provide(injectKeySlideScale, scale)
   &.current {
     z-index: 2;
   }
+  &.last {
+    z-index: 1;
+  }
+  &.next {
+    z-index: 0;
+  }
 
   &.hide {
     opacity: 0;
@@ -104,6 +117,12 @@ provide(injectKeySlideScale, scale)
     &.after {
       pointer-events: none;
       opacity: 0;
+    }
+  }
+  &.turning-mode-morph {
+    &.before,
+    &.after {
+      pointer-events: none;
     }
   }
   &.turning-mode-slideX {

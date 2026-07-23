@@ -220,6 +220,7 @@ interface SlideAnimation {
 
 export const SLIDE_ANIMATIONS: SlideAnimation[] = [
   { label: '无', value: 'no' },
+  { label: '平滑（对象）', value: 'morph' },
   { label: '随机', value: 'random' },
   { label: '左右推移', value: 'slideX' },
   { label: '上下推移', value: 'slideY' },

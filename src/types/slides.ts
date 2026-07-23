@@ -1,3 +1,9 @@
+import type {
+  AnimationTimeline,
+  PptxElementSource,
+  SlideTransition,
+} from '@pptist/presentation-core'
+
 export const enum ShapePathFormulasKeys {
   ROUND_RECT = 'roundRect',
   ROUND_RECT_DIAGONAL = 'roundRectDiagonal',
@@ -142,6 +148,10 @@ interface PPTBaseElement {
   rotate: number
   link?: PPTElementLink
   name?: string
+  /** Stable identity retained from the imported source document. */
+  source?: PptxElementSource
+  /** Explicit cross-slide matching key used by Morph. */
+  morphKey?: string
 }
 
 
@@ -693,6 +703,17 @@ export interface PPTAnimation {
   type: AnimationType
   duration: number
   trigger: AnimationTrigger
+  delay?: number
+  repeatCount?: number
+  autoReverse?: boolean
+  easing?: string
+  source?: {
+    provider: 'pptx'
+    presetClass?: string
+    presetId?: number
+    presetSubtype?: number
+    rawXml?: string
+  }
 }
 
 export type SlideBackgroundType = 'solid' | 'image' | 'gradient'
@@ -721,7 +742,7 @@ export interface SlideBackground {
 }
 
 
-export type TurningMode = 'no' | 'fade' | 'slideX' | 'slideY' | 'random' | 'slideX3D' | 'slideY3D' | 'rotate' | 'scaleY' | 'scaleX' | 'scale' | 'scaleReverse'
+export type TurningMode = 'no' | 'fade' | 'morph' | 'slideX' | 'slideY' | 'random' | 'slideX3D' | 'slideY3D' | 'rotate' | 'scaleY' | 'scaleX' | 'scale' | 'scaleReverse'
 
 export interface NoteReply {
   id: string
@@ -772,6 +793,8 @@ export interface Slide {
   remark?: string
   background?: SlideBackground
   animations?: PPTAnimation[]
+  animationTimeline?: AnimationTimeline
+  transition?: SlideTransition
   turningMode?: TurningMode
   sectionTag?: SectionTag
   type?: SlideType
