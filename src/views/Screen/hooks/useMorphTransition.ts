@@ -4,6 +4,8 @@ import type { PPTElement, Slide } from '@/types/slides'
 
 interface MorphCandidate extends MorphableElement {
   element: PPTElement
+  order: number
+  appearanceFingerprint?: string
 }
 
 const textFingerprint = (html: string) => html
@@ -16,11 +18,59 @@ const textFingerprint = (html: string) => html
 const contentFingerprint = (element: PPTElement) => {
   if (element.type === 'text') return textFingerprint(element.content)
   if (element.type === 'shape') return textFingerprint(element.text?.content || '')
-  if (element.type === 'image') return `${element.src.length}:${element.src.slice(-96)}`
+  if (element.type === 'image') return `${element.src.length}:${element.src.slice(0, 96)}:${element.src.slice(-96)}`
   return undefined
 }
 
-const morphCandidates = (elements: PPTElement[]): MorphCandidate[] => elements.flatMap(element => {
+const appearanceFields: Partial<Record<PPTElement['type'], string[]>> = {
+  text: [
+    'content', 'defaultFontName', 'defaultColor', 'outline', 'fill', 'lineHeight',
+    'wordSpace', 'opacity', 'shadow', 'paragraphSpace', 'vertical', 'textType',
+    'inset', 'fixedHeight', 'vAlign',
+  ],
+  image: [
+    'src', 'outline', 'filters', 'clip', 'flipH', 'flipV', 'shadow', 'radius',
+    'colorMask', 'imageType',
+  ],
+  shape: [
+    'viewBox', 'path', 'fixedRatio', 'fill', 'gradient', 'pattern', 'outline',
+    'opacity', 'flipH', 'flipV', 'shadow', 'special', 'text', 'pathFormula',
+    'keypoints',
+  ],
+  line: [
+    'start', 'end', 'width', 'style', 'color', 'points', 'shadow', 'broken',
+    'broken2', 'broken2Direction', 'curve', 'cubic',
+  ],
+  latex: ['latex', 'path', 'color', 'strokeWidth', 'viewBox'],
+}
+
+const appearanceFingerprint = (element: PPTElement) => {
+  const fields = appearanceFields[element.type]
+  if (!fields) return undefined
+  const record = element as unknown as Record<string, unknown>
+  return JSON.stringify([element.type, ...fields.map(field => {
+    if (field === 'src') return contentFingerprint(element)
+    return record[field]
+  })])
+}
+
+const morphCandidates = (elements: PPTElement[]): MorphCandidate[] => elements.flatMap((element, order): MorphCandidate[] => {
+  if (element.type === 'line') {
+    return [{
+      id: element.id,
+      type: element.type,
+      left: element.left,
+      top: element.top,
+      width: Math.max(24, Math.abs(element.start[0] - element.end[0])),
+      height: Math.max(24, Math.abs(element.start[1] - element.end[1])),
+      rotate: 0,
+      name: element.morphKey || element.name,
+      source: element.source,
+      appearanceFingerprint: appearanceFingerprint(element),
+      element,
+      order,
+    }]
+  }
   if (!('height' in element) || !('rotate' in element)) return []
   if (!Number.isFinite(element.width) || !Number.isFinite(element.height) || !element.width || !element.height) return []
 
@@ -35,9 +85,20 @@ const morphCandidates = (elements: PPTElement[]): MorphCandidate[] => elements.f
     name: element.morphKey || element.name,
     source: element.source,
     contentFingerprint: contentFingerprint(element),
+    appearanceFingerprint: appearanceFingerprint(element),
     element,
+    order,
   }]
 })
+
+const needsVisualCrossfade = (from: MorphCandidate, to: MorphCandidate) => {
+  if (!from.appearanceFingerprint || from.appearanceFingerprint !== to.appearanceFingerprint) return true
+
+  // Text layout changes when its box changes size. Keeping the source DOM in
+  // the transition avoids an initial line-wrap jump while the target reflows.
+  const containsText = from.element.type === 'text' || (from.element.type === 'shape' && !!from.element.text?.content)
+  return containsText && (from.width !== to.width || from.height !== to.height)
+}
 
 export default (
   rootRef: Ref<HTMLElement | null>,
@@ -82,6 +143,7 @@ export default (
       return [{ leaving, node: source.cloneNode(true) as HTMLElement }]
     })
     const matchedClones = new Map(result.matches.flatMap(match => {
+      if (!needsVisualCrossfade(match.from, match.to)) return []
       const source = queryElement(fromSlide.id, match.from.id)
       if (!source) return []
       return [[match.from.id, source.cloneNode(true) as HTMLElement] as const]
@@ -114,11 +176,11 @@ export default (
         targetStage.appendChild(sourceBackgroundClone)
         temporaryNodes.push(sourceBackgroundClone)
       }
-      for (const { node } of leavingClones) {
+      for (const { leaving, node } of leavingClones) {
         node.removeAttribute('id')
         node.setAttribute('aria-hidden', 'true')
         node.style.pointerEvents = 'none'
-        node.style.zIndex = '9999'
+        node.style.zIndex = `${1000 + leaving.order}`
         targetStage.appendChild(node)
         temporaryNodes.push(node)
         runningAnimations.push(node.animate([
@@ -145,7 +207,7 @@ export default (
         sourceClone.removeAttribute('id')
         sourceClone.setAttribute('aria-hidden', 'true')
         sourceClone.style.pointerEvents = 'none'
-        sourceClone.style.zIndex = '9998'
+        sourceClone.style.zIndex = `${1000 + match.from.order}`
         sourceClone.style.transformOrigin = 'top left'
         targetStage.appendChild(sourceClone)
         temporaryNodes.push(sourceClone)
