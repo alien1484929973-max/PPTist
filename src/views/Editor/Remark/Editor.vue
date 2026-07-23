@@ -192,6 +192,9 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  handleInput.flush()
+  mainStore.setDisableHotkeysState(false)
+  menuInstance.value?.destroy()
   editorView && editorView.destroy()
 })
 </script>

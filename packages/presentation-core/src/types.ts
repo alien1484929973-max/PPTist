@@ -42,7 +42,20 @@ export interface TimelineTiming {
   autoReverse?: boolean
   acceleration?: number
   deceleration?: number
+  easing?: string
 }
+
+export type AnimationDirection = 'left' | 'right' | 'up' | 'down'
+export type AnimationPhase = 'entrance' | 'exit' | 'emphasis'
+
+export type CanonicalAnimationEffect =
+  | { kind: 'appear'; phase: 'entrance' | 'exit' }
+  | { kind: 'fade'; phase: 'entrance' | 'exit' }
+  | { kind: 'zoom'; phase: 'entrance' | 'exit' }
+  | { kind: 'wipe'; phase: 'entrance' | 'exit'; direction: AnimationDirection }
+  | { kind: 'fly'; phase: 'entrance' | 'exit'; direction: AnimationDirection }
+  | { kind: 'spin'; phase: 'emphasis'; degrees?: number }
+  | { kind: 'scale'; phase: 'emphasis'; x: number; y: number }
 
 export interface TimelineEffect {
   class: TimelineAnimationClass
@@ -54,6 +67,8 @@ export interface TimelineEffect {
   motionPath?: string
   rotateBy?: number
   scaleBy?: { x: number; y: number }
+  transition?: 'in' | 'out'
+  canonical?: CanonicalAnimationEffect
 }
 
 export interface TimelineAnimation {

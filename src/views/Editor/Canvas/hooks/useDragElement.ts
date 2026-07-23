@@ -5,6 +5,7 @@ import type { PPTElement } from '@/types/slides'
 import type { AlignmentLineProps } from '@/types/edit'
 import { createElementIdMap, getRectRotatedRange, uniqAlignLines, type AlignLine } from '@/utils/element'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
+import { cloneEditorElements } from '@/utils/editorElement'
 
 export default (
   elementList: Ref<PPTElement[]>,
@@ -31,7 +32,7 @@ export default (
     
     const sorptionRange = 5
 
-    const originElementList: PPTElement[] = JSON.parse(JSON.stringify(elementList.value))
+    const originElementList = cloneEditorElements(elementList.value)
     let originActiveElementList = originElementList.filter(el => activeElementIdList.value.includes(el.id))
 
     // 拖拽目标元素和初始属性声明，Ctrl+拖拽复制时会替换为副本元素及其属性

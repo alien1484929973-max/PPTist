@@ -21,8 +21,9 @@ interface DocumentsState {
 }
 
 let changeTrackingStarted = false
-let ignoreChangeTracking = 0
 let savePromise: Promise<boolean> | null = null
+
+const NON_CONTENT_SLIDE_ACTIONS = new Set(['updateSlideIndex', 'setTemplates'])
 
 export const useDocumentsStore = defineStore('documents', {
   state: (): DocumentsState => ({
@@ -119,26 +120,16 @@ export const useDocumentsStore = defineStore('documents', {
       changeTrackingStarted = true
       const slidesStore = useSlidesStore()
 
-      // Current-page navigation and template catalogue updates are editor UI
-      // state, not presentation content. Ignoring them prevents a simple slide
-      // switch from showing the document as modified.
-      slidesStore.$onAction(({ name, after, onError }) => {
-        if (name !== 'updateSlideIndex' && name !== 'setTemplates') return
-        ignoreChangeTracking += 1
-        let released = false
-        const release = () => {
-          if (released) return
-          released = true
-          ignoreChangeTracking = Math.max(0, ignoreChangeTracking - 1)
-        }
-        after(release)
-        onError(release)
+      // Track explicit presentation actions instead of deeply subscribing to
+      // the complete store. A slide switch must stay O(1), even when slides
+      // contain large base64 images.
+      slidesStore.$onAction(({ name, after }) => {
+        if (NON_CONTENT_SLIDE_ACTIONS.has(name)) return
+        after(() => {
+          if (this.suspendTracking || !this.activeDocumentId || this.authStatus !== 'authenticated') return
+          this.markDirty()
+        })
       }, true)
-
-      slidesStore.$subscribe(() => {
-        if (ignoreChangeTracking || this.suspendTracking || !this.activeDocumentId || this.authStatus !== 'authenticated') return
-        this.markDirty()
-      }, { detached: true, flush: 'sync' })
     },
 
     markDirty() {

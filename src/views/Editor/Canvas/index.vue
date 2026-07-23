@@ -103,7 +103,7 @@
 </template>
 
 <script lang="ts" setup>
-import { nextTick, onMounted, onUnmounted, provide, ref, watch, watchEffect, useTemplateRef } from 'vue'
+import { nextTick, onMounted, onUnmounted, provide, ref, watch, useTemplateRef } from 'vue'
 import { throttle } from 'lodash'
 import { storeToRefs } from 'pinia'
 import { useMainStore, useSlidesStore, useKeyboardStore } from '@/store'
@@ -112,6 +112,7 @@ import type { PPTElement, PPTShapeElement } from '@/types/slides'
 import type { AlignmentLineProps, CreateCustomShapeData } from '@/types/edit'
 import { injectKeySlideScale } from '@/types/injectKey'
 import { removeAllRanges } from '@/utils/selection'
+import { cloneEditorElements } from '@/utils/editorElement'
 import { KEYS } from '@/configs/hotkey'
 
 import useViewportSize from './hooks/useViewportSize'
@@ -178,9 +179,13 @@ watch(handleElementId, () => {
 
 const elementList = ref<PPTElement[]>([])
 const setLocalElementList = () => {
-  elementList.value = currentSlide.value ? JSON.parse(JSON.stringify(currentSlide.value.elements)) : []
+  elementList.value = currentSlide.value ? cloneEditorElements(currentSlide.value.elements) : []
 }
-watchEffect(setLocalElementList)
+watch(
+  () => [currentSlide.value?.id, currentSlide.value?.elements] as const,
+  setLocalElementList,
+  { immediate: true },
+)
 
 const canvasRef = useTemplateRef<HTMLElement>('canvasRef')
 const { dragViewport, viewportStyles } = useViewportSize(canvasRef)

@@ -3,9 +3,14 @@ import { throttle } from 'lodash'
 import { storeToRefs } from 'pinia'
 import { useSlidesStore } from '@/store'
 import { KEYS } from '@/configs/hotkey'
-import { ANIMATION_CLASS_PREFIX } from '@/configs/animation'
 import message from '@/utils/message'
 import type { Slide } from '@/types/slides'
+import {
+  resetElementAnimation,
+  runElementAnimation,
+  setElementAnimationFinalState,
+  type ElementAnimationHandle,
+} from '@/utils/elementAnimation'
 
 const AUDIENCE_SYNC_CHANNEL = 'pptist-audience-sync'
 
@@ -52,6 +57,22 @@ export default () => {
 
   // 动画执行状态
   const inAnimation = ref(false)
+  const runningAnimations = new Set<ElementAnimationHandle>()
+  const completedAnimations = new Map<string, ElementAnimationHandle>()
+  let executionGeneration = 0
+
+  const animationElement = (elementId: string) => {
+    return document.querySelector<HTMLElement>(`#screen-element-${elementId} [class^=base-element-]`)
+  }
+
+  const cancelElementAnimations = () => {
+    executionGeneration += 1
+    for (const handle of runningAnimations) handle.cancel()
+    for (const handle of completedAnimations.values()) handle.restore()
+    runningAnimations.clear()
+    completedAnimations.clear()
+    inAnimation.value = false
+  }
 
   // 最小已播放页面索引
   const playedSlidesMinIndex = ref(slideIndex.value)
@@ -61,71 +82,43 @@ export default () => {
     // 正在执行动画时，禁止其他新的动画开始
     if (inAnimation.value) return
 
-    const { animations, autoNext } = formatedAnimations.value[animationIndex.value]
+    const step = formatedAnimations.value[animationIndex.value]
+    if (!step) return
+    const { animations, autoNext } = step
     animationIndex.value += 1
 
     // 标记开始执行动画
     inAnimation.value = true
 
     let endAnimationCount = 0
+    const generation = executionGeneration
 
-    // 依次执行该位置中的全部动画
-    for (const animation of animations) {
-      const elRef: HTMLElement | null = document.querySelector(`#screen-element-${animation.elId} [class^=base-element-]`)
-      if (!elRef) {
-        endAnimationCount += 1
-        continue
-      }
-
-      const animationName = `${ANIMATION_CLASS_PREFIX}${animation.effect}`
-      
-      // 执行动画前先清除原有的动画状态（如果有）
-      elRef.style.removeProperty('--animate-duration')
-      elRef.style.removeProperty('animation-delay')
-      elRef.style.removeProperty('animation-iteration-count')
-      elRef.style.removeProperty('animation-direction')
-      elRef.style.removeProperty('animation-timing-function')
-      for (const classname of elRef.classList) {
-        if (classname.indexOf(ANIMATION_CLASS_PREFIX) !== -1) elRef.classList.remove(classname, `${ANIMATION_CLASS_PREFIX}animated`)
-      }
-      
-      // 执行动画
-      elRef.style.setProperty('--animate-duration', `${animation.duration}ms`)
-      if (animation.delay) elRef.style.setProperty('animation-delay', `${animation.delay}ms`)
-      if (animation.repeatCount && animation.repeatCount > 1 && Number.isFinite(animation.repeatCount)) {
-        const iterations = Math.min(animation.repeatCount * (animation.autoReverse ? 2 : 1), 20)
-        elRef.style.setProperty('animation-iteration-count', `${iterations}`)
-      }
-      if (animation.autoReverse) elRef.style.setProperty('animation-direction', 'alternate')
-      if (animation.easing) elRef.style.setProperty('animation-timing-function', animation.easing)
-      elRef.classList.add(animationName, `${ANIMATION_CLASS_PREFIX}animated`)
-
-      // 执行动画结束，将“退场”以外的动画状态清除
-      const handleAnimationEnd = () => {
-        if (animation.type !== 'out') {
-          elRef.style.removeProperty('--animate-duration')
-          elRef.style.removeProperty('animation-delay')
-          elRef.style.removeProperty('animation-iteration-count')
-          elRef.style.removeProperty('animation-direction')
-          elRef.style.removeProperty('animation-timing-function')
-          elRef.classList.remove(animationName, `${ANIMATION_CLASS_PREFIX}animated`)
-        }
-
-        // 判断该位置上的全部动画都已经结束后，标记动画执行完成，并尝试继续向下执行（如果有需要）
-        endAnimationCount += 1
-        if (endAnimationCount === animations.length) {
-          inAnimation.value = false
-          if (autoNext) runAnimation()
-        }
-      }
-      elRef.addEventListener('animationend', handleAnimationEnd, { once: true })
-    }
-
-    // Broken or unsupported targets must not leave the whole presentation locked.
-    if (endAnimationCount === animations.length) {
+    const completeOne = () => {
+      if (generation !== executionGeneration) return
+      endAnimationCount += 1
+      if (endAnimationCount !== animations.length) return
       inAnimation.value = false
       if (autoNext) runAnimation()
     }
+
+    // 依次执行该位置中的全部动画
+    for (const animation of animations) {
+      const elRef = animationElement(animation.elId)
+      if (!elRef) {
+        completeOne()
+        continue
+      }
+      completedAnimations.get(animation.id)?.restore()
+      const handle = runElementAnimation(elRef, animation)
+      runningAnimations.add(handle)
+      handle.finished.then(() => {
+        runningAnimations.delete(handle)
+        if (generation !== executionGeneration) return
+        completedAnimations.set(animation.id, handle)
+        completeOne()
+      })
+    }
+
   }
 
   onMounted(() => {
@@ -144,32 +137,31 @@ export default () => {
       const { animations } = formatedAnimations.value[i]
       for (const animation of animations) {
         if (animation.type !== 'out') continue
-        const elRef: HTMLElement | null = document.querySelector(`#screen-element-${animation.elId} [class^=base-element-]`)
+        const elRef = animationElement(animation.elId)
         if (!elRef) continue
-        const animationName = `${ANIMATION_CLASS_PREFIX}${animation.effect}`
-        elRef.style.setProperty('--animate-duration', '0ms')
-        elRef.classList.add(animationName, `${ANIMATION_CLASS_PREFIX}animated`)
+        setElementAnimationFinalState(elRef, animation)
       }
     }
   }
 
   // 撤销元素动画，除了将索引前移外，还需要清除动画状态
   const revokeAnimation = () => {
+    executionGeneration += 1
+    for (const handle of runningAnimations) handle.cancel()
+    runningAnimations.clear()
+    inAnimation.value = false
     animationIndex.value -= 1
     const { animations } = formatedAnimations.value[animationIndex.value]
 
     for (const animation of animations) {
-      const elRef: HTMLElement | null = document.querySelector(`#screen-element-${animation.elId} [class^=base-element-]`)
+      const elRef = animationElement(animation.elId)
       if (!elRef) continue
-      
-      elRef.style.removeProperty('--animate-duration')
-      elRef.style.removeProperty('animation-delay')
-      elRef.style.removeProperty('animation-iteration-count')
-      elRef.style.removeProperty('animation-direction')
-      elRef.style.removeProperty('animation-timing-function')
-      for (const classname of elRef.classList) {
-        if (classname.indexOf(ANIMATION_CLASS_PREFIX) !== -1) elRef.classList.remove(classname, `${ANIMATION_CLASS_PREFIX}animated`)
+      const handle = completedAnimations.get(animation.id)
+      if (handle) {
+        handle.restore()
+        completedAnimations.delete(animation.id)
       }
+      else resetElementAnimation(elRef)
     }
 
     // 如果撤销时该位置有且仅有强调动画，则继续执行一次撤销
@@ -185,6 +177,9 @@ export default () => {
     }
   }
   onUnmounted(closeAutoPlay)
+  onUnmounted(cancelElementAnimations)
+
+  watch(slideIndex, () => cancelElementAnimations())
 
   // 循环放映
   const loopPlay = ref(false)

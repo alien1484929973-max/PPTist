@@ -7,6 +7,7 @@ import { MIN_SIZE } from '@/configs/element'
 import { SHAPE_PATH_FORMULAS } from '@/configs/shapes'
 import { type AlignLine, uniqAlignLines } from '@/utils/element'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
+import { cloneEditorElements } from '@/utils/editorElement'
 
 interface RotateElementData {
   left: number
@@ -555,7 +556,7 @@ export default (
     const startPageX = e.pageX
     const startPageY = e.pageY
 
-    const originElementList: PPTElement[] = JSON.parse(JSON.stringify(elementList.value))
+    const originElementList = cloneEditorElements(elementList.value)
 
     document.onmousemove = e => {
       if (!isMouseDown) return

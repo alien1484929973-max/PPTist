@@ -1,6 +1,8 @@
 import JSZip from 'jszip'
 import type {
+  AnimationDirection,
   AnimationTimeline,
+  CanonicalAnimationEffect,
   PptxElementSource,
   SlideTransition,
   TimelineAnimation,
@@ -186,6 +188,15 @@ const animationClass = (value?: string): TimelineAnimationClass => {
   return 'unknown'
 }
 
+const parseEffectDirection = (value?: string): AnimationDirection | undefined => {
+  const descriptor = (value || '').toLowerCase()
+  if (descriptor.includes('left')) return 'left'
+  if (descriptor.includes('right')) return 'right'
+  if (descriptor.includes('up') || descriptor.includes('top')) return 'up'
+  if (descriptor.includes('down') || descriptor.includes('bottom')) return 'down'
+  return undefined
+}
+
 const parseTimeline = (document: XMLDocument, xmlRuntime: PptxXmlRuntime): AnimationTimeline | undefined => {
   const timing = firstByLocalName(document, 'timing')
   if (!timing) return undefined
@@ -223,17 +234,28 @@ const parseTimeline = (document: XMLDocument, xmlRuntime: PptxXmlRuntime): Anima
     const autoReverse = getAttribute(timeNode, 'autoRev') === '1'
     const acceleration = finiteNumber(getAttribute(timeNode, 'accel')) / 100000
     const deceleration = finiteNumber(getAttribute(timeNode, 'decel')) / 100000
-    const effectDescriptor = `${getAttribute(effect, 'filter') || ''} ${getAttribute(effect, 'transition') || ''}`.toLocaleLowerCase()
+    const effectFilter = getAttribute(effect, 'filter')
+    const effectTransition = getAttribute(effect, 'transition')
+    const effectDescriptor = `${effectFilter || ''} ${effectTransition || ''}`.toLocaleLowerCase()
+    const parsedDirection = parseEffectDirection(effectDescriptor)
+    const isWipe = presetId === 22 || effectDescriptor.includes('wipe')
+    const canonical: CanonicalAnimationEffect | undefined = isWipe && parsedDirection
+      ? {
+        kind: 'wipe',
+        phase: effectTransition === 'out' || parsedAnimationClass === 'exit' ? 'exit' : 'entrance',
+        direction: parsedDirection,
+      }
+      : undefined
     const hasFlyDirection = ['left', 'right', 'up', 'top', 'down', 'bottom'].some(direction => effectDescriptor.includes(direction))
     const hasLegacyEquivalent = (parsedAnimationClass === 'entrance' || parsedAnimationClass === 'exit') && (
-      [10, 23, 26, 32].includes(presetId || 0) || (presetId === 2 && hasFlyDirection)
+      [10, 23, 26, 32].includes(presetId || 0) || (presetId === 2 && hasFlyDirection) || (isWipe && !!parsedDirection)
     )
     let compatibility: TimelineAnimation['effect']['compatibility'] = parsedAnimationClass === 'motionPath' || parsedAnimationClass === 'media' || parsedAnimationClass === 'unknown'
       ? 'unsupported'
       : paragraphRange || characterRange
         ? 'approximate'
         : hasLegacyEquivalent ? 'mapped' : 'approximate'
-    if (compatibility === 'mapped' && (acceleration || deceleration || repeatCount === -1)) compatibility = 'approximate'
+    if (compatibility === 'mapped' && repeatCount === -1) compatibility = 'approximate'
 
     animations.push({
       id: `pptx-${getAttribute(timeNode, 'id') || animations.length + 1}`,
@@ -257,14 +279,19 @@ const parseTimeline = (document: XMLDocument, xmlRuntime: PptxXmlRuntime): Anima
         autoReverse,
         acceleration,
         deceleration,
+        easing: acceleration && deceleration
+          ? 'ease-in-out'
+          : acceleration ? 'ease-in' : deceleration ? 'ease-out' : undefined,
       },
       effect: {
         class: parsedAnimationClass,
         compatibility,
         presetId,
         presetSubtype: finiteNumber(getAttribute(timeNode, 'presetSubtype')) || undefined,
-        filter: getAttribute(effect, 'filter'),
-        direction: getAttribute(effect, 'transition'),
+        filter: effectFilter,
+        direction: parsedDirection,
+        transition: effectTransition === 'in' || effectTransition === 'out' ? effectTransition : undefined,
+        canonical,
         motionPath: getAttribute(motion, 'path'),
         rotateBy: getAttribute(rotation, 'by') ? finiteNumber(getAttribute(rotation, 'by')) / 60000 : undefined,
         scaleBy: scaleBy ? {
@@ -297,6 +324,11 @@ const legacyEffect = (animation: TimelineAnimation) => {
   const suffix = directionSuffix(animation)
   const presetId = animation.effect.presetId
 
+  if (animation.effect.canonical?.kind === 'wipe') {
+    const direction = animation.effect.canonical.direction
+    const directionName = direction[0].toUpperCase() + direction.slice(1)
+    return `wipe${leaving ? 'Out' : 'In'}${directionName}`
+  }
   if (animation.effect.class === 'emphasis') return 'pulse'
   if (presetId === 2 && suffix) return `fade${leaving ? 'Out' : 'In'}${suffix}`
   if (presetId === 23) return leaving ? 'zoomOut' : 'zoomIn'
@@ -343,6 +375,7 @@ export const createLegacyPptAnimations = (
         presetClass: animation.effect.class,
         presetId: animation.effect.presetId,
         presetSubtype: animation.effect.presetSubtype,
+        rawXml: animation.source?.rawXml,
       },
     }]
   })

@@ -30,7 +30,7 @@
       v-contextmenu="contextmenusThumbnails"
     >
       <template #item="{ element, index }">
-        <div class="thumbnail-container">
+        <div class="thumbnail-container" :ref="el => setThumbnailRef(element.id, el)">
           <div class="section-title"
             :data-section-id="element?.sectionTag?.id || ''"
             v-if="element.sectionTag || (hasSection && index === 0)" 
@@ -61,7 +61,12 @@
             v-contextmenu="contextmenusThumbnailItem"
           >
             <div class="label" :class="{ 'offset-left': index >= 99 }">{{ fillDigit(index + 1, 2) }}</div>
-            <ThumbnailSlide class="thumbnail" :slide="element" :size="120" :visible="index < slidesLoadLimit" />
+            <ThumbnailSlide
+              class="thumbnail"
+              :slide="element"
+              :size="120"
+              :visible="slideIndex === index || visibleSlideIds.has(element.id)"
+            />
   
             <div class="note-flag" v-if="element.notes && element.notes.length" @click="openNotesPanel()">{{ element.notes.length }}</div>
           </div>
@@ -74,7 +79,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, nextTick, ref, watch, useTemplateRef } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch, useTemplateRef } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useMainStore, useSlidesStore, useKeyboardStore } from '@/store'
 import type { Slide, SlideTheme } from '@/types/slides'
@@ -84,7 +89,6 @@ import type { ContextmenuItem } from '@/components/Contextmenu/types'
 import useSlideHandler from '@/hooks/useSlideHandler'
 import useSectionHandler from '@/hooks/useSectionHandler'
 import useScreening from '@/hooks/useScreening'
-import useLoadSlides from '@/hooks/useLoadSlides'
 import useAddSlidesOrElements from '@/hooks/useAddSlidesOrElements'
 
 import ThumbnailSlide from '@/views/components/ThumbnailSlide/index.vue'
@@ -99,7 +103,42 @@ const { selectedSlidesIndex: _selectedSlidesIndex, thumbnailsFocus } = storeToRe
 const { slides, slideIndex, currentSlide } = storeToRefs(slidesStore)
 const { ctrlKeyState, shiftKeyState } = storeToRefs(keyboardStore)
 
-const { slidesLoadLimit } = useLoadSlides()
+const visibleSlideIds = ref(new Set<string>())
+const thumbnailElements = new Map<string, Element>()
+let thumbnailObserver: IntersectionObserver | null = null
+
+const setThumbnailRef = (id: string, element: unknown) => {
+  const previous = thumbnailElements.get(id)
+  if (previous) thumbnailObserver?.unobserve(previous)
+  if (!(element instanceof Element)) {
+    thumbnailElements.delete(id)
+    return
+  }
+  (element as HTMLElement).dataset.slideId = id
+  thumbnailElements.set(id, element)
+  thumbnailObserver?.observe(element)
+}
+
+onMounted(() => {
+  const root = thumbnailsRef.value?.$el as Element | undefined
+  thumbnailObserver = new IntersectionObserver(entries => {
+    const next = new Set(visibleSlideIds.value)
+    for (const entry of entries) {
+      const id = (entry.target as HTMLElement).dataset.slideId
+      if (!id) continue
+      if (entry.isIntersecting) next.add(id)
+      else next.delete(id)
+    }
+    visibleSlideIds.value = next
+  }, { root, rootMargin: '240px 0px' })
+
+  for (const [id, element] of thumbnailElements) {
+    (element as HTMLElement).dataset.slideId = id
+    thumbnailObserver.observe(element)
+  }
+})
+
+onUnmounted(() => thumbnailObserver?.disconnect())
 
 const selectedSlidesIndex = computed(() => [..._selectedSlidesIndex.value, slideIndex.value])
 

@@ -5,10 +5,12 @@
       @mousedown="$event => resize($event)"
     ></div>
     <Editor
+      v-if="expanded"
       :value="remark"
       ref="editorRef"
       @update="value => handleInput(value)"
     />
+    <div class="collapsed" v-else>演讲者备注{{ remark ? '（已填写）' : '' }}</div>
   </div>
 </template>
 
@@ -30,10 +32,12 @@ const emit = defineEmits<{
 const slidesStore = useSlidesStore()
 const { currentSlide } = storeToRefs(slidesStore)
 
+const expanded = computed(() => props.height > 48)
 const editorRef = useTemplateRef<InstanceType<typeof Editor>>('editorRef')
-watch(() => currentSlide.value.id, () => {
+watch([() => currentSlide.value?.id, expanded], ([, isExpanded]) => {
+  if (!isExpanded) return
   nextTick(() => {
-    editorRef.value!.updateTextContent()
+    editorRef.value?.updateTextContent()
   })
 }, {
   immediate: true,
@@ -85,5 +89,14 @@ const resize = (e: MouseEvent) => {
   right: 0;
   cursor: n-resize;
   z-index: 2;
+}
+.collapsed {
+  height: 100%;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  color: #888;
+  font-size: 12px;
+  cursor: n-resize;
 }
 </style>

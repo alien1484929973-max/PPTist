@@ -3,6 +3,7 @@ import { useSlidesStore } from '@/store'
 import type { PPTElement, PPTLineElement } from '@/types/slides'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 import { canRotateGroupElements, getGroupElementCenter, normalizeAngle, rotateLineElement, rotateRectLikeElement } from '@/utils/element'
+import { cloneEditorElements } from '@/utils/editorElement'
 
 const getAngleFromCoordinate = (x: number, y: number) => {
   const radian = Math.atan2(x, y)
@@ -53,7 +54,7 @@ export default (
     let deltaAngle = 0
 
     const selectedElementIdList = elements.map(element => element.id)
-    const originElementList: PPTElement[] = JSON.parse(JSON.stringify(elementList.value))
+    const originElementList = cloneEditorElements(elementList.value)
     const originElementMap = new Map(originElementList.map(element => [element.id, element]))
     const groupRotationReference = getGroupRotationReference(elements)
     const center = getGroupElementCenter(elements, groupRotationReference ?? 0)

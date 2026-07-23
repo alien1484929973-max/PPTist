@@ -6,6 +6,33 @@ export const ANIMATION_CLASS_PREFIX = 'animate__'
 
 export const ENTER_ANIMATIONS = [
   {
+    type: 'basic',
+    name: '基础',
+    children: [
+      { name: '出现', value: 'appear' },
+    ],
+  },
+  {
+    type: 'wipe',
+    name: '实心擦除',
+    children: [
+      { name: '从左擦除进入', value: 'wipeInLeft' },
+      { name: '从右擦除进入', value: 'wipeInRight' },
+      { name: '从上擦除进入', value: 'wipeInUp' },
+      { name: '从下擦除进入', value: 'wipeInDown' },
+    ],
+  },
+  {
+    type: 'flyNative',
+    name: '飞入（原生）',
+    children: [
+      { name: '从左飞入', value: 'flyInLeft' },
+      { name: '从右飞入', value: 'flyInRight' },
+      { name: '从上飞入', value: 'flyInUp' },
+      { name: '从下飞入', value: 'flyInDown' },
+    ],
+  },
+  {
     type: 'bounce',
     name: '弹跳',
     children: [
@@ -97,6 +124,33 @@ export const ENTER_ANIMATIONS = [
 
 export const EXIT_ANIMATIONS = [
   {
+    type: 'basic',
+    name: '基础',
+    children: [
+      { name: '消失', value: 'disappear' },
+    ],
+  },
+  {
+    type: 'wipe',
+    name: '实心擦除',
+    children: [
+      { name: '向左擦除退出', value: 'wipeOutLeft' },
+      { name: '向右擦除退出', value: 'wipeOutRight' },
+      { name: '向上擦除退出', value: 'wipeOutUp' },
+      { name: '向下擦除退出', value: 'wipeOutDown' },
+    ],
+  },
+  {
+    type: 'flyNative',
+    name: '飞出（原生）',
+    children: [
+      { name: '向左飞出', value: 'flyOutLeft' },
+      { name: '向右飞出', value: 'flyOutRight' },
+      { name: '向上飞出', value: 'flyOutUp' },
+      { name: '向下飞出', value: 'flyOutDown' },
+    ],
+  },
+  {
     type: 'bounce',
     name: '弹跳',
     children: [
@@ -187,6 +241,15 @@ export const EXIT_ANIMATIONS = [
 ]
 
 export const ATTENTION_ANIMATIONS = [
+  {
+    type: 'native',
+    name: '基础强调',
+    children: [
+      { name: '旋转', value: 'spin' },
+      { name: '放大', value: 'grow' },
+      { name: '缩小', value: 'shrink' },
+    ],
+  },
   {
     type: 'shake',
     name: '晃动',

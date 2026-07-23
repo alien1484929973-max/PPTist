@@ -41,7 +41,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, ref, watchEffect, useTemplateRef } from 'vue'
+import { computed, onMounted, ref, watch, useTemplateRef } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useMainStore, useSlidesStore } from '@/store'
 import type { PPTElement } from '@/types/slides'
@@ -51,6 +51,7 @@ import useSlideBackgroundStyle from '@/hooks/useSlideBackgroundStyle'
 import useDragElement from '@/views/Editor/Canvas/hooks/useDragElement'
 import useScaleElement from '@/views/Editor/Canvas/hooks/useScaleElement'
 import useRotateElement from '@/views/Editor/Canvas/hooks/useRotateElement'
+import { cloneEditorElements } from '@/utils/editorElement'
 
 import AlignmentLine from '@/views/Editor/Canvas/AlignmentLine.vue'
 import MobileEditableElement from './MobileEditableElement.vue'
@@ -98,9 +99,13 @@ const viewportStyles = computed(() => ({
 
 const elementList = ref<PPTElement[]>([])
 const setLocalElementList = () => {
-  elementList.value = currentSlide.value ? JSON.parse(JSON.stringify(currentSlide.value.elements)) : []
+  elementList.value = currentSlide.value ? cloneEditorElements(currentSlide.value.elements) : []
 }
-watchEffect(setLocalElementList)
+watch(
+  () => [currentSlide.value?.id, currentSlide.value?.elements] as const,
+  setLocalElementList,
+  { immediate: true },
+)
 
 const { dragElement } = useDragElement(elementList, alignmentLines, canvasScale)
 const { scaleElement } = useScaleElement(elementList, alignmentLines, canvasScale)

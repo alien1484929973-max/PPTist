@@ -68,7 +68,7 @@
             <div class="index">{{element.index}}</div>
             <div class="text">「{{element.elType}}」{{element.animationEffect}}</div>
             <div class="handler">
-              <i-icon-park-outline:play-one class="handler-btn" v-tooltip="'预览'" @click.stop="runAnimation(element.elId, element.effect, element.duration)" />
+              <i-icon-park-outline:play-one class="handler-btn" v-tooltip="'预览'" @click.stop="runAnimation(element.elId, element.effect, element.duration, element.type)" />
               <i-icon-park-outline:close-small class="handler-btn" v-tooltip="'删除'" @click.stop="deleteAnimation(element.id)" />
             </div>
           </div>
@@ -123,6 +123,11 @@ import { nanoid } from 'nanoid'
 import { storeToRefs } from 'pinia'
 import { useMainStore, useSlidesStore } from '@/store'
 import type { AnimationTrigger, AnimationType, PPTAnimation } from '@/types/slides'
+import {
+  canonicalEffectFromLegacy,
+  type TimelineAnimation,
+  type TimelineTrigger,
+} from '@pptist/presentation-core'
 import { 
   ENTER_ANIMATIONS,
   EXIT_ANIMATIONS,
@@ -134,6 +139,7 @@ import {
 import { ELEMENT_TYPE_ZH } from '@/configs/element'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 import useSelectElement from '@/hooks/useSelectElement'
+import { runElementAnimation } from '@/utils/elementAnimation'
 
 import Tabs from '@/components/Tabs.vue'
 import Divider from '@/components/Divider.vue'
@@ -189,6 +195,59 @@ const animationPoolVisible = ref(false)
 const { addHistorySnapshot } = useHistorySnapshot()
 const { selectElement } = useSelectElement()
 
+const timelineTrigger = (trigger: AnimationTrigger): TimelineTrigger => {
+  if (trigger === 'meantime') return 'withPrevious'
+  if (trigger === 'auto') return 'afterPrevious'
+  return 'click'
+}
+
+const toTimelineAnimation = (
+  animation: PPTAnimation,
+  existing?: TimelineAnimation,
+): TimelineAnimation => {
+  const canonical = canonicalEffectFromLegacy(animation.effect, animation.type)
+  return {
+    ...existing,
+    id: animation.id,
+    target: { ...existing?.target, elementId: animation.elId },
+    timing: {
+      duration: animation.duration,
+      delay: animation.delay || 0,
+      trigger: timelineTrigger(animation.trigger),
+      repeatCount: animation.repeatCount,
+      autoReverse: animation.autoReverse,
+      easing: animation.easing,
+    },
+    effect: {
+      ...existing?.effect,
+      class: animation.type === 'in' ? 'entrance' : animation.type === 'out' ? 'exit' : 'emphasis',
+      compatibility: canonical ? 'mapped' : existing?.effect.compatibility || 'approximate',
+      canonical,
+    },
+  }
+}
+
+const commitAnimations = (animations: PPTAnimation[]) => {
+  const existingTimeline = currentSlide.value.animationTimeline?.animations || []
+  const existingById = new Map(existingTimeline.map(animation => [animation.id, animation]))
+  const activeIds = new Set(animations.map(animation => animation.id))
+  const preserved = existingTimeline.filter(animation => {
+    return !activeIds.has(animation.id) && (
+      animation.effect.compatibility === 'unsupported' || !animation.target.elementId
+    )
+  })
+  slidesStore.updateSlide({
+    animations,
+    animationTimeline: {
+      version: 1,
+      animations: [
+        ...animations.map(animation => toTimelineAnimation(animation, existingById.get(animation.id))),
+        ...preserved,
+      ],
+    },
+  })
+}
+
 // 当前页面的动画列表
 const animationSequence = computed(() => {
   const animationSequence = []
@@ -222,7 +281,7 @@ const handleElementAnimation = computed(() => {
 // 删除元素动画
 const deleteAnimation = (id: string) => {
   const animations = currentSlideAnimations.value.filter(item => item.id !== id)
-  slidesStore.updateSlide({ animations })
+  commitAnimations(animations)
   addHistorySnapshot()
 }
 
@@ -236,23 +295,23 @@ const handleDragEnd = (eventData: { newIndex: number; oldIndex: number }) => {
   animations.splice(oldIndex, 1)
   animations.splice(newIndex, 0, animation)
   
-  slidesStore.updateSlide({ animations })
+  commitAnimations(animations)
   addHistorySnapshot()
 }
 
 // 执行动画预览
-const runAnimation = (elId: string, effect: string, duration: number) => {
-  const elRef = document.querySelector(`#editable-element-${elId} [class^=editable-element-]`)
+const runAnimation = (elId: string, effect: string, duration: number, type = activeTab.value as AnimationType) => {
+  const elRef = document.querySelector<HTMLElement>(`#editable-element-${elId} [class^=editable-element-]`)
   if (elRef) {
-    const animationName = `${ANIMATION_CLASS_PREFIX}${effect}`
-    document.documentElement.style.setProperty('--animate-duration', `${duration}ms`)
-    elRef.classList.add(`${ANIMATION_CLASS_PREFIX}animated`, animationName)
-
-    const handleAnimationEnd = () => {
-      document.documentElement.style.removeProperty('--animate-duration')
-      elRef.classList.remove(`${ANIMATION_CLASS_PREFIX}animated`, animationName)
-    }
-    elRef.addEventListener('animationend', handleAnimationEnd, { once: true })
+    const handle = runElementAnimation(elRef, {
+      id: 'preview',
+      elId,
+      effect,
+      type,
+      duration,
+      trigger: 'click',
+    })
+    handle.finished.then(() => window.setTimeout(handle.restore, 80))
   }
 }
 
@@ -263,7 +322,7 @@ const runAllAnimation = async () => {
     if (!animateIn.value) break
     const item = animationSequence.value[i]
     if (item.index !== 1 && item.trigger !== 'meantime') await new Promise(resolve => setTimeout(resolve, item.duration + 100)) 
-    runAnimation(item.elId, item.effect, item.duration)
+    runAnimation(item.elId, item.effect, item.duration, item.type)
     if (i >= animationSequence.value.length - 1) animateIn.value = false
   }
 }
@@ -276,7 +335,7 @@ const updateElementAnimationDuration = (id: string, duration: number) => {
     if (item.id === id) return { ...item, duration }
     return item
   })
-  slidesStore.updateSlide({ animations })
+  commitAnimations(animations)
   addHistorySnapshot()
 }
 
@@ -286,7 +345,7 @@ const updateElementAnimationTrigger = (id: string, trigger: AnimationTrigger) =>
     if (item.id === id) return { ...item, trigger }
     return item
   })
-  slidesStore.updateSlide({ animations })
+  commitAnimations(animations)
   addHistorySnapshot()
 }
 
@@ -296,7 +355,7 @@ const updateElementAnimation = (type: AnimationType, effect: string) => {
     if (item.id === handleAnimationId.value) return { ...item, type, effect }
     return item
   })
-  slidesStore.updateSlide({ animations })
+  commitAnimations(animations)
   animationPoolVisible.value = false
   addHistorySnapshot()
 
@@ -304,7 +363,7 @@ const updateElementAnimation = (type: AnimationType, effect: string) => {
   const duration = animationItem?.duration || ANIMATION_DEFAULT_DURATION
 
   setTimeout(() => {
-    runAnimation(handleElementId.value, effect, duration)
+    runAnimation(handleElementId.value, effect, duration, type)
   }, 0)
 }
 
@@ -325,12 +384,12 @@ const addAnimation = (type: AnimationType, effect: string) => {
     duration: ANIMATION_DEFAULT_DURATION,
     trigger: ANIMATION_DEFAULT_TRIGGER,
   })
-  slidesStore.updateSlide({ animations })
+  commitAnimations(animations)
   animationPoolVisible.value = false
   addHistorySnapshot()
 
   setTimeout(() => {
-    runAnimation(handleElementId.value, effect, ANIMATION_DEFAULT_DURATION)
+    runAnimation(handleElementId.value, effect, ANIMATION_DEFAULT_DURATION, type)
   }, 0)
 }
 
