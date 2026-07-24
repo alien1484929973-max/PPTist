@@ -24,7 +24,7 @@
 
 云文稿 API 使用 Node.js 22 内置 SQLite，默认仅监听 `127.0.0.1:3175`。生产环境应通过 HTTPS 反向代理 `/api/cloud/`。
 
-环境变量说明见 [`server/README.md`](../server/README.md)。
+环境变量说明见 [`backend/README.md`](../backend/README.md)。
 
 ## 当前资源边界
 

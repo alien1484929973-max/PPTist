@@ -8,10 +8,10 @@
   ],
   "scripts": {
     "dev": "vite",
-    "build": "run-p type-check \"build-only {@}\" --",
+    "build": "npm run type-check && npm run build-only && node scripts/assemble-dist.mjs",
     "preview": "vite preview",
-    "cloud-server": "node server/index.mjs",
-    "build-only": "vite build",
+    "cloud-server": "node backend/index.mjs",
+    "build-only": "vite build --outDir .build/frontend --emptyOutDir",
     "type-check": "vue-tsc --build --force",
     "test:core": "node --import tsx --test packages/presentation-core/test/*.test.ts",
     "test:player": "npm run test --workspace pptist-presentation-player",

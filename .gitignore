@@ -11,6 +11,7 @@ node_modules
 .DS_Store
 dist
 dist-ssr
+.build
 coverage
 *.local
 
@@ -30,6 +31,6 @@ coverage
 *.tsbuildinfo
 
 # PPTist Cloud runtime data and secrets
-/server/data/
-/server/uploads/
-/server/*.env
+/backend/data/
+/backend/uploads/
+/backend/*.env
