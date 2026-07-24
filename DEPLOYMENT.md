@@ -7,8 +7,9 @@
 - 前端生产文件：`/srv/pptist/dist/public`
 - 后端生产文件：`/srv/pptist/dist/backend`
 - 环境配置：`/etc/pptist-cloud.env`
-- SQLite 数据：`/var/lib/pptist-cloud/pptist.sqlite`
-- SQLite 备份：`/var/backups/pptist-cloud`
+- PostgreSQL URL：`/etc/pptist-cloud/database-url`（`0600 pptist-cloud:pptist-cloud`）
+- PostgreSQL 数据库：`pptist`，最小权限账号 `pptist_app`
+- PostgreSQL 备份：`/var/backups/pptist-cloud/*.dump`
 
 ```bash
 cd /srv/pptist
@@ -17,6 +18,7 @@ npm run test:core
 npm run test:player
 npm run build
 systemctl restart pptist-cloud.service
+npm run verify:player-package
 ```
 
-Nginx 直接提供 `dist/public`，`/api/cloud/` 转发到 `127.0.0.1:3175`。项目不使用 `/opt`、`/www/wwwroot`、`releases` 或 `current`。
+Nginx 直接提供 `dist/public`，`/api/cloud/` 转发到 `127.0.0.1:3175`。`pptist-cloud.service` 与备份定时器均依赖 PostgreSQL 18；备份使用 `pg_dump` 自定义格式，生产目录不再保留 SQLite。项目不使用 `/opt`、`/www/wwwroot`、`releases` 或 `current`。
