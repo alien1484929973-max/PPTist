@@ -36,7 +36,7 @@
           </template>
         </template>
         <Button class="element-animation-btn" @click="handleAnimationId = ''">
-          <i-icon-park-outline:effects /> 添加动画
+          <i-icon-park-outline:effects /> {{ addAnimationButtonText }}
         </Button>
       </Popover>
     </div>
@@ -85,28 +85,6 @@
               />
             </div>
             <div class="config-item">
-              <div style="width: 35%;">持续时长：</div>
-              <NumberInput 
-                :min="100"
-                :max="10000"
-                :step="100"
-                :value="element.duration" 
-                @update:value="value => updateElementAnimationDuration(element.id, value)" 
-                style="width: 65%;" 
-              />
-            </div>
-            <div class="config-item">
-              <div style="width: 35%;">延迟：</div>
-              <NumberInput
-                :min="0"
-                :max="10000"
-                :step="100"
-                :value="element.delay || 0"
-                @update:value="value => updateElementAnimationDelay(element.id, value)"
-                style="width: 65%;"
-              />
-            </div>
-            <div class="config-item">
               <div style="width: 35%;">开始：</div>
               <Select
                 :value="element.trigger"
@@ -120,50 +98,79 @@
               />
             </div>
             <div class="config-item">
-              <div style="width: 35%;">重复：</div>
-              <Select
-                :value="element.repeatCount || 1"
-                @update:value="value => updateElementAnimationRepeat(element.id, Number(value))"
-                style="width: 65%;"
-                :options="[
-                  { label: '无', value: 1 },
-                  { label: '2 次', value: 2 },
-                  { label: '3 次', value: 3 },
-                  { label: '5 次', value: 5 },
-                  { label: '10 次', value: 10 },
-                ]"
-              />
-            </div>
-            <div class="config-item">
-              <div
-                style="width: 35%;"
-                v-tooltip="'控制动画在开始、途中和结束时如何加速或减速'"
-              >速度曲线：</div>
-              <Select
-                :value="element.easing || 'ease'"
-                @update:value="value => updateElementAnimationEasing(element.id, String(value))"
-                style="width: 65%;"
-                :options="[
-                  { label: '平滑', value: 'ease' },
-                  { label: '匀速', value: 'linear' },
-                  { label: '平滑开始', value: 'ease-in' },
-                  { label: '平滑结束', value: 'ease-out' },
-                  { label: '平滑开始和结束', value: 'ease-in-out' },
-                ]"
-              />
-            </div>
-            <div class="config-item">
-              <div
-                style="width: 35%;"
-                v-tooltip="'到达终点后沿相反方向播放一次，回到起始状态'"
-              >自动翻转：</div>
-              <Switch
-                :value="!!element.autoReverse"
-                @update:value="value => updateElementAnimationAutoReverse(element.id, value)"
-              />
-            </div>
-            <div class="config-item">
               <Button style="width: 100%;" @click="openAnimationPool(element.id)"><i-icon-park-outline:switch /> 更换动画</Button>
+            </div>
+            <div class="advanced-settings-toggle" @click.stop="toggleAdvancedSettings(element.id)">
+              <span>高级设置</span>
+              <i-icon-park-outline:down v-if="advancedAnimationId === element.id" />
+              <i-icon-park-outline:right v-else />
+            </div>
+            <div class="advanced-settings" v-if="advancedAnimationId === element.id">
+              <div class="config-item">
+                <div style="width: 35%;">持续时长：</div>
+                <NumberInput
+                  :min="100"
+                  :max="10000"
+                  :step="100"
+                  :value="element.duration"
+                  @update:value="value => updateElementAnimationDuration(element.id, value)"
+                  style="width: 65%;"
+                />
+              </div>
+              <div class="config-item">
+                <div style="width: 35%;">延迟：</div>
+                <NumberInput
+                  :min="0"
+                  :max="10000"
+                  :step="100"
+                  :value="element.delay || 0"
+                  @update:value="value => updateElementAnimationDelay(element.id, value)"
+                  style="width: 65%;"
+                />
+              </div>
+              <div class="config-item">
+                <div style="width: 35%;">重复：</div>
+                <Select
+                  :value="element.repeatCount || 1"
+                  @update:value="value => updateElementAnimationRepeat(element.id, Number(value))"
+                  style="width: 65%;"
+                  :options="[
+                    { label: '无', value: 1 },
+                    { label: '2 次', value: 2 },
+                    { label: '3 次', value: 3 },
+                    { label: '5 次', value: 5 },
+                    { label: '10 次', value: 10 },
+                  ]"
+                />
+              </div>
+              <div class="config-item">
+                <div
+                  style="width: 35%;"
+                  v-tooltip="'控制动画在开始、途中和结束时如何加速或减速'"
+                >速度曲线：</div>
+                <Select
+                  :value="element.easing || 'ease'"
+                  @update:value="value => updateElementAnimationEasing(element.id, String(value))"
+                  style="width: 65%;"
+                  :options="[
+                    { label: '平滑', value: 'ease' },
+                    { label: '匀速', value: 'linear' },
+                    { label: '平滑开始', value: 'ease-in' },
+                    { label: '平滑结束', value: 'ease-out' },
+                    { label: '平滑开始和结束', value: 'ease-in-out' },
+                  ]"
+                />
+              </div>
+              <div class="config-item">
+                <div
+                  style="width: 35%;"
+                  v-tooltip="'到达终点后沿相反方向播放一次，回到起始状态'"
+                >自动翻转：</div>
+                <Switch
+                  :value="!!element.autoReverse"
+                  @update:value="value => updateElementAnimationAutoReverse(element.id, value)"
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -205,7 +212,6 @@ import {
   getAnimationEffectLabel,
 } from '@/configs/animation'
 import { ELEMENT_TYPE_ZH } from '@/configs/element'
-import { isSingleGroupSelection } from '@/utils/element'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 import useSelectElement from '@/hooks/useSelectElement'
 import { runElementAnimation, type ElementAnimationHandle } from '@/utils/elementAnimation'
@@ -258,19 +264,39 @@ const animateIn = ref(false)
 const animationPoolVisible = ref(false)
 const activeAnimationId = ref('')
 const handleAnimationId = ref('')
+const advancedAnimationId = ref('')
 
-const selectedGroupId = computed(() => {
-  if (activeGroupElementId.value || !isSingleGroupSelection(activeElementList.value)) return ''
-  return activeElementList.value[0].groupId || ''
+const batchTargetIds = computed(() => {
+  if (activeGroupElementId.value || activeElementList.value.length <= 1) return []
+  return activeElementList.value.map(element => element.id)
 })
-const animationTargetId = computed(() => selectedGroupId.value || handleElementId.value)
-const animationTargetAvailable = computed(() => !!selectedGroupId.value || !!handleElement.value)
+const animationTargetIds = computed(() => {
+  if (batchTargetIds.value.length) return batchTargetIds.value
+  return handleElementId.value ? [handleElementId.value] : []
+})
+const animationTargetAvailable = computed(() => animationTargetIds.value.length > 0 && (!!handleElement.value || batchTargetIds.value.length > 0))
+const animationTargetKey = computed(() => animationTargetIds.value.join('|'))
+const addAnimationButtonText = computed(() => batchTargetIds.value.length
+  ? `批量添加动画（${batchTargetIds.value.length} 个元素）`
+  : '添加动画')
+const selectedTargetsContainGroup = (groupId: string) => {
+  const memberIds = currentSlide.value.elements
+    .filter(element => element.groupId === groupId)
+    .map(element => element.id)
+  return memberIds.length > 1 &&
+    memberIds.length === animationTargetIds.value.length &&
+    memberIds.every(id => animationTargetIds.value.includes(id))
+}
 
-watch(animationTargetId, targetId => {
+watch(animationTargetKey, () => {
   animationPoolVisible.value = false
+  advancedAnimationId.value = ''
   const active = currentSlideAnimations.value.find(animation => animation.id === activeAnimationId.value)
-  if (active?.elId === targetId) return
-  activeAnimationId.value = currentSlideAnimations.value.find(animation => animation.elId === targetId)?.id || ''
+  if (active && (
+    animationTargetIds.value.includes(active.elId) ||
+    (active.target?.groupId && selectedTargetsContainGroup(active.target.groupId))
+  )) return
+  activeAnimationId.value = currentSlideAnimations.value.find(animation => animationTargetIds.value.includes(animation.elId))?.id || ''
 }, { immediate: true })
 
 const timelineTrigger = (trigger: AnimationTrigger): TimelineTrigger => {
@@ -372,6 +398,7 @@ const animationSequence = computed<SequenceAnimation[]>(() => {
 })
 
 const selectAnimation = (animation: PPTAnimation) => {
+  if (activeAnimationId.value !== animation.id) advancedAnimationId.value = ''
   activeAnimationId.value = animation.id
   const groupId = animation.target?.groupId
   if (!groupId) {
@@ -389,8 +416,13 @@ const selectAnimation = (animation: PPTAnimation) => {
 const deleteAnimation = (id: string) => {
   const animations = currentSlideAnimations.value.filter(item => item.id !== id)
   commitAnimations(animations)
-  activeAnimationId.value = animations.find(item => item.elId === animationTargetId.value)?.id || ''
+  if (advancedAnimationId.value === id) advancedAnimationId.value = ''
+  activeAnimationId.value = animations.find(item => animationTargetIds.value.includes(item.elId))?.id || ''
   addHistorySnapshot()
+}
+
+const toggleAdvancedSettings = (id: string) => {
+  advancedAnimationId.value = advancedAnimationId.value === id ? '' : id
 }
 
 const handleDragEnd = (eventData: { newIndex: number; oldIndex: number }) => {
@@ -528,21 +560,24 @@ const addAnimation = (type: EditableAnimationType, effect: string) => {
     updateElementAnimation(type, effect)
     return
   }
-  const animation: PPTAnimation = {
+  const targetIds = animationTargetIds.value
+  if (!targetIds.length) return
+  const newAnimations: PPTAnimation[] = targetIds.map((elId, index) => ({
     id: nanoid(10),
-    elId: animationTargetId.value,
-    target: selectedGroupId.value ? { groupId: selectedGroupId.value } : undefined,
+    elId,
     type,
     effect,
     direction: defaultDirectionForEffect(effect, type),
     duration: ANIMATION_DEFAULT_DURATION,
-    trigger: ANIMATION_DEFAULT_TRIGGER,
-  }
-  commitAnimations([...currentSlideAnimations.value, animation])
+    trigger: targetIds.length > 1
+      ? index === 0 ? 'click' : 'meantime'
+      : ANIMATION_DEFAULT_TRIGGER,
+  }))
+  commitAnimations([...currentSlideAnimations.value, ...newAnimations])
   animationPoolVisible.value = false
-  activeAnimationId.value = animation.id
+  activeAnimationId.value = newAnimations[0].id
   addHistorySnapshot()
-  window.setTimeout(() => previewAnimation(animation), 0)
+  window.setTimeout(() => newAnimations.forEach(previewAnimation), 0)
 }
 
 const popoverMaskHide = ref(false)
@@ -603,6 +638,23 @@ $motionColor: #6f7fc6;
   & + .config-item {
     margin-top: 5px;
   }
+}
+.advanced-settings-toggle {
+  margin-top: 8px;
+  padding: 7px 2px 2px;
+  border-top: 1px solid $borderColor;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #666;
+  cursor: pointer;
+  user-select: none;
+}
+.advanced-settings {
+  margin-top: 6px;
+  padding: 8px;
+  border-radius: $borderRadius;
+  background-color: #f7f7f7;
 }
 .tip {
   height: 32px;

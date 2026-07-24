@@ -14,6 +14,8 @@
     "build-only": "vite build",
     "type-check": "vue-tsc --build --force",
     "test:core": "node --import tsx --test packages/presentation-core/test/*.test.ts",
+    "test:player": "npm run test --workspace @pptist/presentation-player",
+    "build:player": "npm run build --workspace @pptist/presentation-player",
     "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix --ignore-path .gitignore",
     "prepare": "husky install"
   },
