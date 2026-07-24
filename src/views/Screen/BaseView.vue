@@ -1,6 +1,17 @@
 <template>
   <div class="base-view" :class="{ 'laser-pen': laserPen }">
+    <PresentationPlayerCanvas
+      v-if="dependencyPlayerEnabled"
+      @ready="attachPresentationPlayer"
+      @stateChange="syncPresentationPlayerState"
+      @error="fallbackToClassicRenderer"
+      @wheel="($event: WheelEvent) => mousewheelListener($event)"
+      @touchstart="($event: TouchEvent) => touchStartListener($event)"
+      @touchend="($event: TouchEvent) => touchEndListener($event)"
+      v-contextmenu="contextmenus"
+    />
     <ScreenSlideList
+      v-else
       :slideWidth="slideWidth"
       :slideHeight="slideHeight"
       :animationIndex="animationIndex"
@@ -63,12 +74,14 @@ import { storeToRefs } from 'pinia'
 import { useSlidesStore } from '@/store'
 import type { ContextmenuItem } from '@/components/Contextmenu/types'
 import { enterFullscreen } from '@/utils/fullscreen'
+import { audienceViewUrl, useDependencyPresentationPlayer } from '@/configs/presentationPlayer'
 import useScreening from '@/hooks/useScreening'
 import useExecPlay from './hooks/useExecPlay'
 import useSlideSize from './hooks/useSlideSize'
 import useFullscreen from './hooks/useFullscreen'
 
 import ScreenSlideList from './ScreenSlideList.vue'
+import PresentationPlayerCanvas from './PresentationPlayerCanvas.vue'
 import SlideThumbnails from './SlideThumbnails.vue'
 import WritingBoardTool from './WritingBoardTool.vue'
 import CountdownTimer from './CountdownTimer.vue'
@@ -100,7 +113,12 @@ const {
   animationIndex,
   laserPen,
   broadcastExit,
+  attachPresentationPlayer,
+  syncPresentationPlayerState,
 } = useExecPlay()
+
+const dependencyPlayerEnabled = ref(useDependencyPresentationPlayer())
+const fallbackToClassicRenderer = () => dependencyPlayerEnabled.value = false
 
 const { slideWidth, slideHeight } = useSlideSize()
 const { exitScreening: _exitScreening } = useScreening()
@@ -114,7 +132,7 @@ const bottomThumbnailsVisible = ref(false)
 
 const openAudienceView = () => {
   manualExitFullscreen()
-  window.open(`${location.origin}${location.pathname}?mode=audience`, 'pptist-audience', 'popup')
+  window.open(audienceViewUrl(), 'pptist-audience', 'popup')
 }
 
 const exitScreening = () => {

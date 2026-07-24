@@ -102,6 +102,18 @@ export class PresentationPlayerController<T extends PlayableSlide = PlayableSlid
     return { type: 'slide', slideIndex: this._slideIndex }
   }
 
+  /**
+   * Restore a deterministic playback cursor without running animations. This
+   * is used by presenter/audience hand-off and by hosts that persist progress.
+   */
+  seek(slideIndex: number, stepIndex = 0): PlayerAction {
+    const action = this.goTo(slideIndex)
+    if (action.type !== 'slide' || !this.currentSlide) return action
+    const stepCount = compileTimeline(this.currentSlide.animationTimeline).length
+    this._stepIndex = Math.min(Math.max(stepIndex, 0), stepCount)
+    return action
+  }
+
   next(): PlayerAction {
     if (!this.currentSlide) return { type: 'end' }
     const steps = compileTimeline(this.currentSlide.animationTimeline)

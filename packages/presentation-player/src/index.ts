@@ -1,3 +1,7 @@
 export * from './types'
 export * from './timeline'
+export * from './chart'
+export * from './compatibility'
+export * from './image'
+export * from './schema'
 export { DomPresentationPlayer, createPresentationPlayer } from './player'

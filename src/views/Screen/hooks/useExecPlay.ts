@@ -1,4 +1,4 @@
-import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { throttle } from 'lodash'
 import { storeToRefs } from 'pinia'
 import { useSlidesStore } from '@/store'
@@ -13,6 +13,7 @@ import {
   type ElementAnimationHandle,
 } from '@/utils/elementAnimation'
 import type { DomAnimationTargets } from '@pptist/presentation-core'
+import type { PlayerState, PresentationPlayer } from '@pptist/presentation-player'
 
 const AUDIENCE_SYNC_CHANNEL = 'pptist-audience-sync'
 
@@ -56,6 +57,20 @@ export default () => {
 
   // 当前页的元素动画执行到的位置
   const animationIndex = ref(0)
+  const dependencyPlayer = shallowRef<PresentationPlayer | null>(null)
+
+  const syncPresentationPlayerState = (state: PlayerState) => {
+    if (slideIndex.value !== state.slideIndex) slidesStore.updateSlideIndex(state.slideIndex)
+    animationIndex.value = state.stepIndex
+  }
+
+  const attachPresentationPlayer = (player: PresentationPlayer | null) => {
+    dependencyPlayer.value = player
+    if (player) {
+      player.goToStep(slideIndex.value, animationIndex.value)
+      syncPresentationPlayerState(player.state)
+    }
+  }
 
   // 动画执行状态
   const inAnimation = ref(false)
@@ -173,6 +188,10 @@ export default () => {
   // 入场动画的可见性由 animationIndex + needWaitAnimation 计算属性控制，无须额外处理
   // 强调动画无持久效果，也无须处理
   const restoreAnimationState = (targetIndex: number) => {
+    if (dependencyPlayer.value) {
+      dependencyPlayer.value.goToStep(slideIndex.value, targetIndex)
+      return
+    }
     for (let i = 0; i < targetIndex && i < formatedAnimations.value.length; i++) {
       const { animations } = formatedAnimations.value[i]
       for (const animation of animations) {
@@ -224,6 +243,12 @@ export default () => {
   onUnmounted(cancelElementAnimations)
 
   watch(slideIndex, () => {
+    if (dependencyPlayer.value) {
+      if (dependencyPlayer.value.state.slideIndex !== slideIndex.value) {
+        dependencyPlayer.value.goTo(slideIndex.value)
+      }
+      return
+    }
     cancelElementAnimations()
     nextTick(initializePendingTargetStates)
   })
@@ -244,6 +269,10 @@ export default () => {
   // 撤回到上一页时，若该页从未播放过（意味着不存在动画状态），需要将动画索引置为最小值（初始状态），否则置为最大值（最终状态）
   const execPrev = (broadcast = true) => {
     if (broadcast) syncChannel?.postMessage({ type: 'EXEC_PREV' } as SyncMessage)
+    if (dependencyPlayer.value) {
+      void dependencyPlayer.value.previous()
+      return
+    }
     if (formatedAnimations.value.length && animationIndex.value > 0) {
       revokeAnimation()
     }
@@ -263,6 +292,10 @@ export default () => {
   }
   const execNext = () => {
     syncChannel?.postMessage({ type: 'EXEC_NEXT' } as SyncMessage)
+    if (dependencyPlayer.value) {
+      void dependencyPlayer.value.next()
+      return
+    }
     if (formatedAnimations.value.length && animationIndex.value < formatedAnimations.value.length) {
       runAnimation()
     }
@@ -348,10 +381,18 @@ export default () => {
 
   // 切换到上一张/上一张幻灯片（无视元素的入场动画）
   const turnPrevSlide = () => {
+    if (dependencyPlayer.value) {
+      dependencyPlayer.value.goTo(slideIndex.value - 1)
+      return
+    }
     slidesStore.updateSlideIndex(slideIndex.value - 1)
     animationIndex.value = 0
   }
   const turnNextSlide = () => {
+    if (dependencyPlayer.value) {
+      dependencyPlayer.value.goTo(slideIndex.value + 1)
+      return
+    }
     slidesStore.updateSlideIndex(slideIndex.value + 1)
     animationIndex.value = 0
   }
@@ -359,6 +400,10 @@ export default () => {
   // 切换幻灯片到指定的页面
   const turnSlideToIndex = (index: number) => {
     syncChannel?.postMessage({ type: 'TURN_TO_INDEX', index } as SyncMessage)
+    if (dependencyPlayer.value) {
+      dependencyPlayer.value.goTo(index)
+      return
+    }
     slidesStore.updateSlideIndex(index)
     animationIndex.value = 0
   }
@@ -366,6 +411,10 @@ export default () => {
     const index = slides.value.findIndex(slide => slide.id === id)
     if (index !== -1) {
       syncChannel?.postMessage({ type: 'TURN_TO_ID', id } as SyncMessage)
+      if (dependencyPlayer.value) {
+        dependencyPlayer.value.goTo(index)
+        return
+      }
       slidesStore.updateSlideIndex(index)
       animationIndex.value = 0
     }
@@ -375,7 +424,9 @@ export default () => {
   const laserPen = ref(false)
 
   const handleLaserMove = (e: MouseEvent) => {
-    const slideEl = document.querySelector('.screen-slide-list .slide-item.current .slide-content') as HTMLElement | null
+    const slideEl = document.querySelector(
+      '.screen-slide-list .slide-item.current .slide-content, .screen-slide-list .pptist-player-canvas',
+    ) as HTMLElement | null
     if (!slideEl) return
     const rect = slideEl.getBoundingClientRect()
     const x = (e.clientX - rect.left) / rect.width
@@ -421,5 +472,7 @@ export default () => {
     restoreAnimationState,
     laserPen,
     broadcastExit,
+    attachPresentationPlayer,
+    syncPresentationPlayerState,
   }
 }

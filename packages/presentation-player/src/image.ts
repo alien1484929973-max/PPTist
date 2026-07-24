@@ -1,0 +1,23 @@
+/** CSS clip paths used by the PPTist document schema and both renderers. */
+export const PRESENTATION_IMAGE_CLIP_PATHS: Readonly<Record<string, string>> = {
+  rect: '',
+  snip1Rect: 'polygon(0% 0%, 80% 0%, 100% 20%, 100% 100%, 0 100%)',
+  snip2DiagRect: 'polygon(0% 0%, 80% 0%, 100% 20%, 100% 100%, 20% 100%, 0% 80%)',
+  roundRect: 'inset(0 round 10px)',
+  ellipse: 'ellipse(50% 50% at 50% 50%)',
+  triangle: 'polygon(50% 0%, 0% 100%, 100% 100%)',
+  rtTriangle: 'polygon(0% 0%, 0% 100%, 100% 100%)',
+  triangleReverse: 'polygon(50% 100%, 0% 0%, 100% 0%)',
+  diamond: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)',
+  pentagon: 'polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%)',
+  hexagon: 'polygon(20% 0%, 80% 0%, 100% 50%, 80% 100%, 20% 100%, 0% 50%)',
+  heptagon: 'polygon(50% 0%, 90% 20%, 100% 60%, 75% 100%, 25% 100%, 0% 60%, 10% 20%)',
+  octagon: 'polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%)',
+  chevron: 'polygon(75% 0%, 100% 50%, 75% 100%, 0% 100%, 25% 50%, 0% 0%)',
+  homePlate: 'polygon(0% 0%, 75% 0%, 100% 50%, 75% 100%, 0% 100%)',
+  rightArrow: 'polygon(0% 20%, 60% 20%, 60% 0%, 100% 50%, 60% 100%, 60% 80%, 0% 80%)',
+  parallelogram: 'polygon(30% 0%, 100% 0%, 70% 100%, 0% 100%)',
+  parallelogramReverse: 'polygon(30% 100%, 100% 100%, 70% 0%, 0% 0%)',
+  trapezoid: 'polygon(25% 0%, 75% 0%, 100% 100%, 0% 100%)',
+  trapezoidReverse: 'polygon(0% 0%, 100% 0%, 75% 100%, 25% 100%)',
+}

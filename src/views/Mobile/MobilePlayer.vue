@@ -6,7 +6,17 @@
       transform: `rotate(90deg) translateY(-${playerSize.height}px)`,
     }"
   >
-    <div 
+    <PresentationPlayerCanvas
+      v-if="dependencyPlayerEnabled"
+      @ready="attachPresentationPlayer"
+      @stateChange="syncPresentationPlayerState"
+      @error="fallbackToClassicRenderer"
+      @click="toolVisible = !toolVisible"
+      @touchstart="($event: TouchEvent) => touchStartListener($event)"
+      @touchend="($event: TouchEvent) => touchEndListener($event)"
+    />
+    <div
+      v-else
       class="screen-slide-list" 
       @click="toolVisible = !toolVisible"
       @touchstart="$event => touchStartListener($event)"
@@ -54,14 +64,17 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, shallowRef, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useSlidesStore } from '@/store'
 import type { Mode } from '@/types/mobile'
+import { useDependencyPresentationPlayer } from '@/configs/presentationPlayer'
+import type { PlayerState, PresentationPlayer } from '@pptist/presentation-player'
 import useSlidesWithTurningMode from '../Screen/hooks/useSlidesWithTurningMode'
 
 import ThumbnailSlide from '@/views/components/ThumbnailSlide/index.vue'
 import MobileThumbnails from './MobileThumbnails.vue'
+import PresentationPlayerCanvas from '../Screen/PresentationPlayerCanvas.vue'
 
 defineProps<{
   changeMode: (mode: Mode) => void
@@ -73,11 +86,23 @@ const { slides, slideIndex, viewportRatio } = storeToRefs(slidesStore)
 const { slidesWithTurningMode } = useSlidesWithTurningMode()
 
 const toolVisible = ref(false)
+const dependencyPlayerEnabled = ref(useDependencyPresentationPlayer())
+const fallbackToClassicRenderer = () => dependencyPlayerEnabled.value = false
+const dependencyPlayer = shallowRef<PresentationPlayer | null>(null)
+
+const attachPresentationPlayer = (player: PresentationPlayer | null) => {
+  dependencyPlayer.value = player
+}
+
+const syncPresentationPlayerState = (state: PlayerState) => {
+  if (slideIndex.value !== state.slideIndex) slidesStore.updateSlideIndex(state.slideIndex)
+}
 
 const playerSize = ref({ width: 0, height: 0 })
 
 onMounted(() => {
   if (slideIndex.value !== 0) slidesStore.updateSlideIndex(0)
+  dependencyPlayer.value?.goTo(0)
 
   playerSize.value = {
     width: document.body.clientHeight,
@@ -122,15 +147,31 @@ const touchEndListener = (e: TouchEvent) => {
   const offsetAbsY = Math.abs(offsetY)
 
   if ( offsetAbsX > offsetAbsY && offsetAbsX > 50 ) {
+    if (dependencyPlayer.value) {
+      if (offsetX < 0) void dependencyPlayer.value.previous()
+      if (offsetX > 0) void dependencyPlayer.value.next()
+      return
+    }
     if (offsetX < 0 && slideIndex.value > 0) slidesStore.updateSlideIndex(slideIndex.value - 1)
     if (offsetX > 0 && slideIndex.value < slides.value.length - 1) slidesStore.updateSlideIndex(slideIndex.value + 1)
   }
 
   if ( offsetAbsY > offsetAbsX && offsetAbsY > 50 ) {
+    if (dependencyPlayer.value) {
+      if (offsetY > 0) void dependencyPlayer.value.previous()
+      if (offsetY < 0) void dependencyPlayer.value.next()
+      return
+    }
     if (offsetY > 0 && slideIndex.value > 0) slidesStore.updateSlideIndex(slideIndex.value - 1)
     if (offsetY < 0 && slideIndex.value < slides.value.length - 1) slidesStore.updateSlideIndex(slideIndex.value + 1)
   }
 }
+
+watch(slideIndex, index => {
+  if (dependencyPlayer.value && dependencyPlayer.value.state.slideIndex !== index) {
+    dependencyPlayer.value.goTo(index)
+  }
+})
 </script>
 
 <style lang="scss" scoped>

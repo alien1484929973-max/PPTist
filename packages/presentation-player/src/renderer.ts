@@ -10,6 +10,10 @@ import type {
   PlayerSlide,
   PlayerSlideBackground,
 } from './types'
+import { renderPresentationChart, type PlayerChartData, type PlayerChartType } from './chart'
+import tinycolor from 'tinycolor2'
+import { getPresentationLinePath, getPresentationLineRenderPath } from '@pptist/presentation-core'
+import { PRESENTATION_IMAGE_CLIP_PATHS } from './image'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 
@@ -38,6 +42,7 @@ export const applySlideBackground = (
   target: HTMLElement,
   background: PlayerSlideBackground | undefined,
   themeColor = '#fff',
+  resolveResourceUrl: (url: string) => string | null = url => url,
 ) => {
   target.style.background = themeColor
   target.style.backgroundImage = ''
@@ -52,7 +57,9 @@ export const applySlideBackground = (
     target.style.background = gradientCss(background.gradient)
   }
   else if (background.type === 'image' && background.image?.src) {
-    target.style.backgroundImage = `url("${background.image.src.replace(/"/g, '\\"')}")`
+    const src = resolveResourceUrl(background.image.src)
+    if (!src) return
+    target.style.backgroundImage = `url("${src.replace(/"/g, '\\"')}")`
     target.style.backgroundRepeat = background.image.size === 'repeat' ? 'repeat' : 'no-repeat'
     target.style.backgroundSize = background.image.size === 'repeat' ? 'contain' : background.image.size || 'cover'
     target.style.backgroundPosition = 'center'
@@ -82,8 +89,8 @@ const renderText = (context: ElementRendererContext) => {
   const inset = element.inset || [10, 10, 10, 10]
   content.className = 'pptist-player-text ProseMirror-static'
   content.style.boxSizing = 'border-box'
-  content.style.width = '100%'
-  content.style.height = '100%'
+  content.style.width = element.vertical && !element.fixedHeight ? 'auto' : '100%'
+  content.style.height = !element.vertical && !element.fixedHeight ? 'auto' : '100%'
   content.style.padding = `${inset[0]}px ${inset[1]}px ${inset[2]}px ${inset[3]}px`
   content.style.background = element.fill || 'transparent'
   content.style.color = element.defaultColor || context.presentation.theme?.fontColor || '#333'
@@ -118,17 +125,6 @@ type ImageElementData = PlayerElement & {
   colorMask?: string
 }
 
-const clipPaths: Record<string, string> = {
-  ellipse: 'ellipse(50% 50% at 50% 50%)',
-  triangle: 'polygon(50% 0%, 0% 100%, 100% 100%)',
-  rtTriangle: 'polygon(0% 0%, 0% 100%, 100% 100%)',
-  triangleReverse: 'polygon(50% 100%, 0% 0%, 100% 0%)',
-  diamond: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)',
-  pentagon: 'polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%)',
-  hexagon: 'polygon(20% 0%, 80% 0%, 100% 50%, 80% 100%, 20% 100%, 0% 50%)',
-  roundRect: 'inset(0 round 10px)',
-}
-
 const renderImage = (context: ElementRendererContext) => {
   const element = context.element as ImageElementData
   const wrapper = context.container.ownerDocument.createElement('div')
@@ -139,13 +135,17 @@ const renderImage = (context: ElementRendererContext) => {
   wrapper.style.overflow = 'hidden'
   wrapper.style.border = outlineStyle(element.outline)
   wrapper.style.borderRadius = element.radius ? `${element.radius}px` : ''
-  wrapper.style.clipPath = element.clip?.shape ? clipPaths[element.clip.shape] || '' : ''
+  const clipShape = element.clip?.shape || 'rect'
+  wrapper.style.clipPath = element.radius && (clipShape === 'rect' || clipShape === 'roundRect')
+    ? `inset(0 round ${element.radius}px)`
+    : PRESENTATION_IMAGE_CLIP_PATHS[clipShape] || ''
   wrapper.style.filter = element.shadow ? `drop-shadow(${shadowStyle(element.shadow)})` : ''
+  wrapper.style.transform = `scale(${element.flipH ? -1 : 1}, ${element.flipV ? -1 : 1})`
 
   const image = context.container.ownerDocument.createElement('img')
   image.alt = element.name || ''
   image.draggable = false
-  image.src = element.src || ''
+  image.src = context.resolveResourceUrl(element.src || '', 'image') || ''
   image.style.position = 'absolute'
   image.style.objectFit = 'fill'
   const range = element.clip?.range
@@ -162,7 +162,6 @@ const renderImage = (context: ElementRendererContext) => {
     image.style.width = '100%'
     image.style.height = '100%'
   }
-  image.style.transform = `scale(${element.flipH ? -1 : 1}, ${element.flipV ? -1 : 1})`
   image.style.filter = Object.entries(element.filters || {}).map(([name, value]) => `${name}(${value})`).join(' ')
   wrapper.appendChild(image)
 
@@ -245,6 +244,9 @@ const appendSvgFill = (
 
 const renderShape = (context: ElementRendererContext) => {
   const element = context.element as ShapeElementData
+  const renderElement = element.pattern
+    ? { ...element, pattern: context.resolveResourceUrl(element.pattern, 'pattern') || undefined }
+    : element
   const wrapper = context.container.ownerDocument.createElement('div')
   wrapper.style.position = 'relative'
   wrapper.style.width = '100%'
@@ -262,7 +264,7 @@ const renderShape = (context: ElementRendererContext) => {
   svg.style.overflow = 'visible'
   const path = svgElement(context.container.ownerDocument, 'path')
   path.setAttribute('d', element.path || '')
-  path.setAttribute('fill', appendSvgFill(svg, element))
+  path.setAttribute('fill', appendSvgFill(svg, renderElement))
   path.setAttribute('stroke', element.outline?.color || 'transparent')
   path.setAttribute('stroke-width', String(element.outline?.width || 0))
   if (element.outline?.style === 'dashed') path.setAttribute('stroke-dasharray', '5 2.5')
@@ -288,6 +290,7 @@ const renderShape = (context: ElementRendererContext) => {
     text.style.fontFamily = element.text.defaultFontName || context.presentation.theme?.fontName || 'sans-serif'
     text.style.lineHeight = String(element.text.lineHeight || 1.5)
     text.style.letterSpacing = `${element.text.wordSpace || 0}px`
+    text.style.setProperty('--pptist-paragraph-space', `${element.text.paragraphSpace ?? 5}px`)
     text.innerHTML = context.sanitizeHtml(element.text.content)
     wrapper.appendChild(text)
   }
@@ -308,27 +311,13 @@ type LineElementData = PlayerElement & {
   shadow?: PlayerShadow
 }
 
-const linePath = (element: LineElementData) => {
-  const start = element.start || [0, 0]
-  const end = element.end || [0, 0]
-  if (element.broken) return `M${start.join(',')} L${element.broken.join(',')} L${end.join(',')}`
-  if (element.broken2) {
-    const direction = element.broken2Direction || (Math.abs(end[0] - start[0]) >= Math.abs(end[1] - start[1]) ? 'horizontal' : 'vertical')
-    return direction === 'horizontal'
-      ? `M${start.join(',')} L${element.broken2[0]},${start[1]} L${element.broken2[0]},${end[1]} L${end.join(',')}`
-      : `M${start.join(',')} L${start[0]},${element.broken2[1]} L${end[0]},${element.broken2[1]} L${end.join(',')}`
-  }
-  if (element.curve) return `M${start.join(',')} Q${element.curve.join(',')} ${end.join(',')}`
-  if (element.cubic) return `M${start.join(',')} C${element.cubic[0].join(',')} ${element.cubic[1].join(',')} ${end.join(',')}`
-  return `M${start.join(',')} L${end.join(',')}`
-}
-
 const renderLine = (context: ElementRendererContext) => {
   const element = context.element as LineElementData
-  const points = [element.start, element.end, element.broken, element.broken2, element.curve, ...(element.cubic || [])]
-    .filter((point): point is [number, number] => !!point)
-  const width = Math.max(24, ...points.map(point => point[0] + element.width * 3))
-  const height = Math.max(24, ...points.map(point => point[1] + element.width * 3))
+  const start = element.start || [0, 0]
+  const end = element.end || [0, 0]
+  const line = { ...element, start, end, points: element.points || ['', ''] } as Required<Pick<LineElementData, 'start' | 'end' | 'width' | 'points'>> & LineElementData
+  const width = Math.max(24, Math.abs(start[0] - end[0]))
+  const height = Math.max(24, Math.abs(start[1] - end[1]))
   const svg = svgElement(context.container.ownerDocument, 'svg')
   svg.setAttribute('width', String(width))
   svg.setAttribute('height', String(height))
@@ -342,30 +331,37 @@ const renderLine = (context: ElementRendererContext) => {
     const markerId = `pptist-line-${element.id.replace(/[^a-zA-Z0-9_-]/g, '')}-${index}`
     markerIds[index] = markerId
     marker.id = markerId
-    marker.setAttribute('markerUnits', 'strokeWidth')
+    const size = Math.max(2, element.width)
+    marker.setAttribute('markerUnits', 'userSpaceOnUse')
     marker.setAttribute('orient', 'auto')
-    marker.setAttribute('markerWidth', '6')
-    marker.setAttribute('markerHeight', '6')
-    marker.setAttribute('refX', index === 0 ? '0' : '5')
-    marker.setAttribute('refY', '3')
+    marker.setAttribute('markerWidth', String(size * 3))
+    marker.setAttribute('markerHeight', String(size * 3))
+    marker.setAttribute('refX', index === 0 ? '0' : String(size * 3))
+    marker.setAttribute('refY', String(size * 1.5))
     const markerPath = svgElement(svg.ownerDocument, 'path')
-    markerPath.setAttribute('d', pointType === 'dot' ? 'M0 3a3 3 0 1 0 6 0a3 3 0 1 0-6 0z' : 'M0,0 L6,3 0,6 Z')
+    markerPath.setAttribute('d', pointType === 'dot' ? 'm0 5a5 5 0 1 0 10 0a5 5 0 1 0 -10 0z' : 'M0,0 L10,5 0,10 Z')
     markerPath.setAttribute('fill', element.color || '#000')
-    if (index === 0 && pointType === 'arrow') markerPath.setAttribute('transform', 'rotate(180 3 3)')
+    markerPath.setAttribute('transform', `scale(${size * 0.3}, ${size * 0.3}) rotate(${index === 0 && pointType === 'arrow' ? 180 : 0}, 5, 5)`)
     marker.appendChild(markerPath)
     defs.appendChild(marker)
   }
   svg.appendChild(defs)
   const path = svgElement(svg.ownerDocument, 'path')
-  path.setAttribute('d', linePath(element))
+  path.setAttribute('d', getPresentationLineRenderPath(line))
   path.setAttribute('stroke', element.color || '#000')
   path.setAttribute('stroke-width', String(element.width))
   path.setAttribute('fill', 'none')
   if (element.style === 'dashed') path.setAttribute('stroke-dasharray', `${element.width * 5} ${element.width * 2.5}`)
   if (element.style === 'dotted') path.setAttribute('stroke-dasharray', `${element.width * 1.8} ${element.width * 1.6}`)
-  if (markerIds[0]) path.setAttribute('marker-start', `url(#${markerIds[0]})`)
-  if (markerIds[1]) path.setAttribute('marker-end', `url(#${markerIds[1]})`)
   svg.appendChild(path)
+  const markerPath = svgElement(svg.ownerDocument, 'path')
+  markerPath.setAttribute('d', getPresentationLinePath(line))
+  markerPath.setAttribute('stroke', 'transparent')
+  markerPath.setAttribute('stroke-width', String(element.width))
+  markerPath.setAttribute('fill', 'none')
+  if (markerIds[0]) markerPath.setAttribute('marker-start', `url(#${markerIds[0]})`)
+  if (markerIds[1]) markerPath.setAttribute('marker-end', `url(#${markerIds[1]})`)
+  svg.appendChild(markerPath)
   return svg
 }
 
@@ -379,6 +375,13 @@ type TableElementData = PlayerElement & {
   colWidths?: number[]
   cellMinHeight?: number
   outline?: PlayerOutline
+  theme?: {
+    color: string
+    rowHeader: boolean
+    rowFooter: boolean
+    colHeader: boolean
+    colFooter: boolean
+  }
 }
 
 const renderTable = (context: ElementRendererContext) => {
@@ -386,7 +389,6 @@ const renderTable = (context: ElementRendererContext) => {
   const table = context.container.ownerDocument.createElement('table')
   table.className = 'pptist-player-table'
   table.style.width = '100%'
-  table.style.height = '100%'
   table.style.borderCollapse = 'collapse'
   const colgroup = context.container.ownerDocument.createElement('colgroup')
   for (const width of element.colWidths || []) {
@@ -395,24 +397,49 @@ const renderTable = (context: ElementRendererContext) => {
     colgroup.appendChild(col)
   }
   table.appendChild(colgroup)
-  for (const row of element.data || []) {
+  const rows = element.data || []
+  const hiddenCells = new Set<string>()
+  rows.forEach((row, rowIndex) => row.forEach((cell, colIndex) => {
+    const colspan = cell.colspan || 1
+    const rowspan = cell.rowspan || 1
+    for (let targetRow = rowIndex; targetRow < rowIndex + rowspan; targetRow++) {
+      for (let targetCol = targetRow === rowIndex ? colIndex + 1 : colIndex; targetCol < colIndex + colspan; targetCol++) {
+        hiddenCells.add(`${targetRow}:${targetCol}`)
+      }
+    }
+  }))
+  const themeColor = element.theme?.color || ''
+  const themeBase = themeColor ? tinycolor(themeColor) : null
+  const themeRows = themeBase
+    ? [themeBase.clone().setAlpha(0.1).toRgbString(), themeBase.clone().setAlpha(0.3).toRgbString()]
+    : ['', '']
+  for (const [rowIndex, row] of rows.entries()) {
     const tr = context.container.ownerDocument.createElement('tr')
-    for (const cell of row) {
+    tr.style.height = `${element.cellMinHeight || 20}px`
+    for (const [colIndex, cell] of row.entries()) {
+      if (hiddenCells.has(`${rowIndex}:${colIndex}`)) continue
       const td = context.container.ownerDocument.createElement('td')
       td.colSpan = cell.colspan || 1
       td.rowSpan = cell.rowspan || 1
-      td.textContent = cell.text || ''
-      td.style.minHeight = `${element.cellMinHeight || 20}px`
       td.style.border = outlineStyle(element.outline) || '1px solid #666'
       const style = cell.style || {}
-      if (style.color) td.style.color = String(style.color)
+      const isRowAccent = element.theme?.rowHeader && rowIndex === 0 || element.theme?.rowFooter && rowIndex === rows.length - 1
+      const isColAccent = element.theme?.colHeader && colIndex === 0 || element.theme?.colFooter && colIndex === row.length - 1
+      if (themeColor) td.style.background = isRowAccent || isColAccent ? themeColor : themeRows[rowIndex % 2]
       if (style.backcolor) td.style.background = String(style.backcolor)
-      if (style.fontsize) td.style.fontSize = String(style.fontsize)
-      if (style.fontname) td.style.fontFamily = String(style.fontname)
-      if (style.align) td.style.textAlign = String(style.align)
-      if (style.vAlign) td.style.verticalAlign = style.vAlign === 'middle' ? 'middle' : style.vAlign === 'bottom' ? 'bottom' : 'top'
-      td.style.fontWeight = style.bold ? 'bold' : ''
-      td.style.fontStyle = style.em ? 'italic' : ''
+      const text = context.container.ownerDocument.createElement('div')
+      text.className = 'pptist-player-cell-text'
+      text.textContent = cell.text || ''
+      text.style.minHeight = `${Math.max(0, (element.cellMinHeight || 20) - 4)}px`
+      text.style.justifyContent = style.vAlign === 'middle' ? 'center' : style.vAlign === 'bottom' ? 'flex-end' : 'flex-start'
+      text.style.color = style.color ? String(style.color) : '#000'
+      text.style.fontSize = style.fontsize ? String(style.fontsize) : '14px'
+      if (style.fontname) text.style.fontFamily = String(style.fontname)
+      text.style.textAlign = style.align ? String(style.align) : 'left'
+      text.style.fontWeight = style.bold ? 'bold' : 'normal'
+      text.style.fontStyle = style.em ? 'italic' : 'normal'
+      text.style.textDecoration = `${style.underline ? 'underline' : ''} ${style.strikethrough ? 'line-through' : ''}`.trim() || 'none'
+      td.appendChild(text)
       tr.appendChild(td)
     }
     table.appendChild(tr)
@@ -425,31 +452,94 @@ const renderLatex = (context: ElementRendererContext) => {
   const svg = svgElement(context.container.ownerDocument, 'svg')
   const viewBox = element.viewBox || [element.width, element.height || 1]
   svg.setAttribute('viewBox', `0 0 ${viewBox[0]} ${viewBox[1]}`)
+  svg.setAttribute('preserveAspectRatio', 'none')
   svg.style.width = '100%'
   svg.style.height = '100%'
   const path = svgElement(svg.ownerDocument, 'path')
   path.setAttribute('d', element.path || '')
-  path.setAttribute('fill', element.color || 'currentColor')
+  path.setAttribute('fill', 'none')
   path.setAttribute('stroke', element.color || 'currentColor')
   path.setAttribute('stroke-width', String(element.strokeWidth || 0))
+  path.setAttribute('stroke-linecap', 'round')
+  path.setAttribute('stroke-linejoin', 'round')
   svg.appendChild(path)
   return svg
 }
 
 const renderMedia = (context: ElementRendererContext) => {
-  const element = context.element as PlayerElement & { src?: string; poster?: string; autoplay?: boolean; loop?: boolean }
-  const media = context.container.ownerDocument.createElement(element.type === 'video' ? 'video' : 'audio')
-  media.src = element.src || ''
-  media.controls = true
-  media.autoplay = !!element.autoplay
-  media.loop = !!element.loop
+  const element = context.element as PlayerElement & { src?: string; poster?: string; autoplay?: boolean; loop?: boolean; color?: string }
   if (element.type === 'video') {
-    const video = media as HTMLVideoElement
-    video.poster = element.poster || ''
+    const video = context.container.ownerDocument.createElement('video')
+    video.src = context.resolveResourceUrl(element.src || '', 'media') || ''
+    video.controls = true
+    video.autoplay = !!element.autoplay
+    video.poster = context.resolveResourceUrl(element.poster || '', 'poster') || ''
     video.style.width = '100%'
     video.style.height = '100%'
+    context.onCleanup(() => video.pause())
+    return video
   }
-  return media
+
+  const wrapper = context.container.ownerDocument.createElement('div')
+  wrapper.className = 'pptist-player-audio'
+  const button = context.container.ownerDocument.createElement('button')
+  button.type = 'button'
+  button.setAttribute('aria-label', '播放或暂停音频')
+  const icon = svgElement(context.container.ownerDocument, 'svg')
+  icon.setAttribute('viewBox', '0 0 24 24')
+  icon.setAttribute('aria-hidden', 'true')
+  const path = svgElement(context.container.ownerDocument, 'path')
+  path.setAttribute('d', 'M4 9v6h4l5 4V5L8 9H4zm11.5 3a3.5 3.5 0 0 0-1.5-2.87v5.74A3.5 3.5 0 0 0 15.5 12zm0-7.1v2.06a6 6 0 0 1 0 10.08v2.06a8 8 0 0 0 0-14.2z')
+  path.setAttribute('fill', element.color || 'currentColor')
+  icon.appendChild(path)
+  button.appendChild(icon)
+  const audio = context.container.ownerDocument.createElement('audio')
+  audio.src = context.resolveResourceUrl(element.src || '', 'media') || ''
+  audio.controls = true
+  audio.autoplay = !!element.autoplay
+  audio.loop = !!element.loop
+  button.addEventListener('click', () => {
+    if (audio.paused) void audio.play().catch(() => undefined)
+    else audio.pause()
+  })
+  wrapper.append(button, audio)
+  context.onCleanup(() => audio.pause())
+  return wrapper
+}
+
+type ChartElementData = PlayerElement & {
+  fill?: string
+  chartType?: PlayerChartType
+  data?: PlayerChartData
+  options?: { lineSmooth?: boolean; stack?: boolean }
+  outline?: PlayerOutline
+  themeColors?: string[]
+  textColor?: string
+  lineColor?: string
+}
+
+const renderChart = (context: ElementRendererContext) => {
+  const element = context.element as ChartElementData
+  const host = context.container.ownerDocument.createElement('div')
+  host.className = 'pptist-player-chart'
+  host.style.width = '100%'
+  host.style.height = '100%'
+  host.style.background = element.fill || 'transparent'
+  host.style.border = outlineStyle(element.outline)
+  const handle = renderPresentationChart(host, {
+    type: element.chartType || 'bar',
+    data: element.data || { labels: [], legends: [], series: [] },
+    themeColors: element.themeColors || context.presentation.theme?.themeColors as string[] || [],
+    textColor: element.textColor,
+    lineColor: element.lineColor,
+    lineSmooth: element.options?.lineSmooth,
+    stack: element.options?.stack,
+  }, {
+    width: element.width,
+    height: element.height || 1,
+  })
+  context.onCleanup(handle.destroy)
+  return host
 }
 
 const builtInRenderers: Record<string, PlayerElementRenderer> = {
@@ -461,6 +551,7 @@ const builtInRenderers: Record<string, PlayerElementRenderer> = {
   latex: renderLatex,
   video: renderMedia,
   audio: renderMedia,
+  chart: renderChart,
 }
 
 export interface RenderElementResult {
@@ -476,6 +567,7 @@ export const renderElement = (
   presentation: PlayerDocument,
   options: PlayerOptions,
   onSlideLink: (slideId: string) => void,
+  onCleanup: (cleanup: () => void) => void = () => {},
 ) : RenderElementResult => {
   const root = ownerDocument.createElement('div')
   root.className = 'pptist-player-element'
@@ -490,12 +582,18 @@ export const renderElement = (
   }
 
   const sanitizeHtml = options.sanitizeHtml || ((html: string) => html)
+  const resolveResourceUrl = (url: string, kind: Parameters<NonNullable<PlayerOptions['resolveResourceUrl']>>[1]) => {
+    if (!url) return null
+    return options.resolveResourceUrl ? options.resolveResourceUrl(url, kind) : url
+  }
   const context: ElementRendererContext = {
     element,
     slide,
     presentation,
     container: root,
     sanitizeHtml,
+    resolveResourceUrl,
+    onCleanup,
   }
   const renderer = options.renderers?.[element.type] || builtInRenderers[element.type]
   const content = renderer?.(context)
@@ -516,7 +614,10 @@ export const renderElement = (
     root.addEventListener('click', event => {
       event.stopPropagation()
       if (element.link?.type === 'slide') onSlideLink(element.link.target)
-      else if (element.link?.target) ownerDocument.defaultView?.open(element.link.target, '_blank', 'noopener,noreferrer')
+      else if (element.link?.target) {
+        const target = resolveResourceUrl(element.link.target, 'link')
+        if (target) ownerDocument.defaultView?.open(target, '_blank', 'noopener,noreferrer')
+      }
     })
   }
   return { root, supported }

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
+  createPresentationMorphCandidates,
   PresentationPlayerController,
   compileAnimationSteps,
   compileTimeline,
@@ -71,6 +72,34 @@ test('player controller advances animation steps before changing slides', () => 
   assert.deepEqual(controller.next(), { type: 'end' })
   assert.deepEqual(controller.previous(), { type: 'slide', slideIndex: 0 })
   assert.equal(controller.stepIndex, 2)
+})
+
+test('player controller restores a bounded slide and animation cursor', () => {
+  const controller = new PresentationPlayerController()
+  controller.load([{ id: 'one', animationTimeline: timeline }, { id: 'two' }])
+
+  assert.deepEqual(controller.seek(0, 99), { type: 'slide', slideIndex: 0 })
+  assert.equal(controller.stepIndex, 2)
+  assert.deepEqual(controller.seek(99, -2), { type: 'slide', slideIndex: 1 })
+  assert.equal(controller.stepIndex, 0)
+})
+
+test('shared morph candidates preserve PPTist identity and appearance', () => {
+  const candidates = createPresentationMorphCandidates([
+    {
+      id: 'title', type: 'text', left: 10, top: 20, width: 200, height: 40, rotate: 0,
+      morphKey: '!!Title', content: '<p>Hello</p>', defaultFontName: 'Arial',
+    },
+    {
+      id: 'line', type: 'line', left: 0, top: 0, width: 2,
+      start: [0, 0], end: [100, 20], color: '#000',
+    },
+  ])
+
+  assert.equal(candidates[0].name, '!!Title')
+  assert.equal(candidates[0].contentFingerprint, 'hello')
+  assert.equal(candidates[1].width, 100)
+  assert.equal(candidates[1].height, 24)
 })
 
 test('framework-independent compiler also handles editor trigger adapters', () => {

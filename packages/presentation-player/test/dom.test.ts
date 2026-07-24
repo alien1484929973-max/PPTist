@@ -1,0 +1,99 @@
+import assert from 'node:assert/strict'
+import test from 'node:test'
+import { Window } from 'happy-dom'
+
+const installDom = () => {
+  const window = new Window({ url: 'https://example.test/' })
+  Object.assign(globalThis, {
+    window,
+    document: window.document,
+    HTMLElement: window.HTMLElement,
+    SVGElement: window.SVGElement,
+    ResizeObserver: window.ResizeObserver,
+    getComputedStyle: window.getComputedStyle.bind(window),
+  })
+  const domHost = window.document.createElement('div')
+  Object.defineProperties(domHost, {
+    clientWidth: { value: 1000 },
+    clientHeight: { value: 562.5 },
+  })
+  window.document.body.appendChild(domHost)
+  return { window, host: domHost as unknown as HTMLElement }
+}
+
+test('standalone DOM package renders all formal element families without Vue', async () => {
+  const { window, host } = installDom()
+  const { createPresentationPlayer } = await import('../src/index')
+  const player = createPresentationPlayer(host, {
+    schemaVersion: 2,
+    width: 1000,
+    height: 562.5,
+    theme: { fontName: 'Arial', fontColor: '#222', themeColors: ['#4472c4'] },
+    slides: [{
+      id: 'one',
+      animationTimeline: {
+        version: 1,
+        animations: [{
+          id: 'paragraph-in',
+          target: { elementId: 'text', paragraphIndex: 0 },
+          timing: { duration: 1, delay: 0, trigger: 'click' },
+          effect: { class: 'entrance', canonical: { kind: 'fade', phase: 'entrance' } },
+        }],
+      },
+      elements: [
+        { id: 'text', type: 'text', left: 10, top: 10, width: 240, height: 80, rotate: 0, content: '<p>Hello<script>bad()</script></p>' },
+        { id: 'image', type: 'image', left: 10, top: 100, width: 100, height: 100, rotate: 0, src: 'https://example.test/a.png', clip: { shape: 'heptagon', range: [[0, 0], [100, 100]] } },
+        { id: 'shape', type: 'shape', left: 130, top: 100, width: 100, height: 100, rotate: 0, viewBox: [100, 100], path: 'M0 0L100 0L100 100Z', fill: '#f00' },
+        { id: 'line', type: 'line', left: 10, top: 220, width: 2, start: [0, 0], end: [200, 40], style: 'dashed', color: '#000', points: ['arrow', 'dot'] },
+        { id: 'table', type: 'table', left: 250, top: 10, width: 240, height: 120, rotate: 0, data: [[{ id: 'a', text: 'Cell', colspan: 1, rowspan: 1 }]], colWidths: [1], cellMinHeight: 30, outline: { width: 1, color: '#000' } },
+        { id: 'latex', type: 'latex', left: 250, top: 150, width: 120, height: 50, rotate: 0, viewBox: [120, 50], path: 'M0 25L120 25', color: '#000', strokeWidth: 2 },
+        { id: 'chart', type: 'chart', left: 500, top: 10, width: 300, height: 220, rotate: 0, chartType: 'bar', data: { labels: ['A'], legends: ['S'], series: [[1]] }, themeColors: ['#4472c4'] },
+        { id: 'video', type: 'video', left: 500, top: 250, width: 160, height: 90, rotate: 0, src: 'https://example.test/a.mp4', autoplay: false },
+        { id: 'audio', type: 'audio', left: 680, top: 250, width: 40, height: 40, rotate: 0, src: 'https://example.test/a.mp3', autoplay: false, loop: false, color: '#444' },
+      ],
+    }],
+  }, {
+    sanitizeHtml: html => html.replace(/<script[\s\S]*?<\/script>/gi, ''),
+    resolveResourceUrl: url => url.startsWith('javascript:') ? null : url,
+  })
+
+  assert.equal(host.querySelectorAll('[data-pptist-element-id]').length, 9)
+  assert.equal(host.querySelector('.pptist-player-text')?.textContent, 'Hello')
+  assert.equal((host.querySelector('.pptist-player-text p') as HTMLElement).style.visibility, 'hidden')
+  assert.match((host.querySelector('.pptist-player-image') as HTMLElement).style.clipPath, /polygon/)
+  assert.equal(host.querySelector('.pptist-player-cell-text')?.textContent, 'Cell')
+  assert.ok(host.querySelector('.pptist-player-chart svg'))
+  assert.ok(host.querySelector('video'))
+  assert.ok(host.querySelector('audio'))
+  assert.equal(player.state.slideCount, 1)
+  await player.next()
+  assert.equal((host.querySelector('.pptist-player-text p') as HTMLElement).style.visibility, 'visible')
+  player.destroy()
+  assert.equal(host.querySelector('.pptist-player-viewport'), null)
+  await window.happyDOM.abort()
+})
+
+test('standalone navigation completes slide transitions and Morph', async () => {
+  const { window, host } = installDom()
+  const { createPresentationPlayer } = await import('../src/index')
+  const element = (id: string, left: number) => ({
+    id, type: 'text', left, top: 10, width: 200, height: 60, rotate: 0,
+    name: '!!title', content: '<p>Morph</p>',
+  })
+  const player = createPresentationPlayer(host, {
+    width: 1000,
+    height: 562.5,
+    slides: [
+      { id: 'one', elements: [element('one-title', 10)] },
+      { id: 'two', transition: { type: 'morph', duration: 1, morph: { mode: 'byObject' } }, elements: [element('two-title', 300)] },
+    ],
+  })
+  await player.next()
+  assert.equal(player.state.slideIndex, 1)
+  assert.equal(host.querySelectorAll('.pptist-player-slide').length, 1)
+  await player.previous()
+  assert.equal(player.state.slideIndex, 0)
+  assert.equal(host.querySelectorAll('.pptist-player-slide').length, 1)
+  player.destroy()
+  await window.happyDOM.abort()
+})

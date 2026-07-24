@@ -1,0 +1,52 @@
+name: Release presentation player
+
+on:
+  push:
+    tags:
+      - 'presentation-player-v*'
+  workflow_dispatch:
+    inputs:
+      publish_npm:
+        description: Publish to npm after tests (requires NPM_TOKEN)
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org/
+          cache: npm
+      - run: npm ci
+      - run: npm run test:core
+      - run: npm run test:player
+      - run: NODE_OPTIONS=--max-old-space-size=1024 npx vue-tsc -p tsconfig.app.json --noEmit
+      - run: npm run build:player
+      - run: npm run verify:player-package
+      - name: Pack
+        working-directory: packages/presentation-player
+        run: npm pack --pack-destination "$GITHUB_WORKSPACE"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: presentation-player-package
+          path: pptist-presentation-player-*.tgz
+      - name: Publish beta to npm
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_npm }}
+        working-directory: packages/presentation-player
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --tag beta --provenance --access public
+      - name: Create GitHub release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" pptist-presentation-player-*.tgz --generate-notes

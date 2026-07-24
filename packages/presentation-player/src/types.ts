@@ -24,6 +24,56 @@ export interface PlayerElementLink {
   target: string
 }
 
+export interface PlayerImageFilters {
+  blur?: string
+  brightness?: string
+  contrast?: string
+  grayscale?: string
+  saturate?: string
+  'hue-rotate'?: string
+  sepia?: string
+  invert?: string
+  opacity?: string
+}
+
+export interface PlayerShapeText {
+  content: string
+  defaultFontName: string
+  defaultColor: string
+  align: 'top' | 'middle' | 'bottom'
+  lineHeight?: number
+  wordSpace?: number
+  paragraphSpace?: number
+  inset?: [number, number, number, number]
+}
+
+export interface PlayerTableCellStyle {
+  bold?: boolean
+  em?: boolean
+  underline?: boolean
+  strikethrough?: boolean
+  color?: string
+  backcolor?: string
+  fontsize?: string
+  fontname?: string
+  align?: 'left' | 'center' | 'right' | 'justify'
+  vAlign?: 'top' | 'middle' | 'bottom'
+}
+
+export interface PlayerTableCell {
+  id?: string
+  colspan: number
+  rowspan: number
+  text: string
+  style?: PlayerTableCellStyle
+}
+
+export interface PlayerChartElementData {
+  labels: string[]
+  legends: string[]
+  series: number[][]
+}
+
 /**
  * Structural representation of a PPTist element. Built-in renderers understand
  * text, image, shape, line, table, LaTeX, video and audio fields. Applications
@@ -40,7 +90,65 @@ export interface PlayerElement {
   groupId?: string
   link?: PlayerElementLink
   name?: string
-  [key: string]: unknown
+  morphKey?: string
+  source?: {
+    provider: 'pptx'
+    slideIndex: number
+    shapeId: string
+    name?: string
+    creationId?: string
+  }
+  content?: string
+  defaultFontName?: string
+  defaultColor?: string
+  fill?: string
+  opacity?: number
+  lineHeight?: number
+  wordSpace?: number
+  paragraphSpace?: number
+  vertical?: boolean
+  fixedHeight?: boolean
+  vAlign?: 'top' | 'middle' | 'bottom'
+  inset?: [number, number, number, number]
+  outline?: PlayerOutline
+  shadow?: PlayerShadow
+  src?: string
+  filters?: PlayerImageFilters
+  clip?: { range: [[number, number], [number, number]]; shape: string }
+  flipH?: boolean
+  flipV?: boolean
+  radius?: number
+  colorMask?: string
+  viewBox?: [number, number]
+  path?: string
+  gradient?: PlayerGradient
+  pattern?: string
+  text?: PlayerShapeText
+  start?: [number, number]
+  end?: [number, number]
+  style?: 'solid' | 'dashed' | 'dotted'
+  color?: string
+  points?: ['' | 'arrow' | 'dot', '' | 'arrow' | 'dot']
+  broken?: [number, number]
+  broken2?: [number, number]
+  broken2Direction?: 'horizontal' | 'vertical'
+  curve?: [number, number]
+  cubic?: [[number, number], [number, number]]
+  chartType?: 'bar' | 'column' | 'line' | 'pie' | 'ring' | 'area' | 'radar' | 'scatter'
+  data?: PlayerChartElementData | PlayerTableCell[][]
+  options?: { lineSmooth?: boolean; stack?: boolean }
+  themeColors?: string[]
+  textColor?: string
+  lineColor?: string
+  colWidths?: number[]
+  cellMinHeight?: number
+  theme?: { color: string; rowHeader: boolean; rowFooter: boolean; colHeader: boolean; colFooter: boolean }
+  strokeWidth?: number
+  autoplay?: boolean
+  poster?: string
+  loop?: boolean
+  ext?: string
+  fixedRatio?: boolean
 }
 
 export interface PlayerSlideBackground {
@@ -124,17 +232,28 @@ export interface PlayerSlide {
   background?: PlayerSlideBackground
   animations?: PlayerLegacyAnimation[]
   animationTimeline?: PlayerAnimationTimeline
-  [key: string]: unknown
+  transition?: {
+    type: string
+    duration: number
+    direction?: string | null
+    autoAdvanceAfter?: number
+    morph?: { mode: 'byObject' | 'byWord' | 'byChar' }
+    source?: 'pptx' | 'editor'
+  }
+  turningMode?: 'no' | 'fade' | 'morph' | 'slideX' | 'slideY' | 'random' | 'slideX3D' | 'slideY3D' | 'rotate' | 'scaleY' | 'scaleX' | 'scale' | 'scaleReverse'
 }
 
 export interface PlayerTheme {
   fontName?: string
   fontColor?: string
   backgroundColor?: string
-  [key: string]: unknown
+  themeColors?: string[]
+  outline?: PlayerOutline
+  shadow?: PlayerShadow
 }
 
 export interface PlayerDocument {
+  schemaVersion?: number
   title?: string
   width: number
   height: number
@@ -149,9 +268,13 @@ export interface ElementRendererContext {
   presentation: PlayerDocument
   container: HTMLElement
   sanitizeHtml: (html: string) => string
+  resolveResourceUrl: (url: string, kind: PlayerResourceKind) => string | null
+  /** Register observers or library instances that must be released on rerender. */
+  onCleanup: (cleanup: () => void) => void
 }
 
 export type PlayerElementRenderer = (context: ElementRendererContext) => HTMLElement | SVGElement | void
+export type PlayerResourceKind = 'image' | 'media' | 'poster' | 'pattern' | 'background' | 'link'
 
 export interface PlayerState {
   slideIndex: number
@@ -171,6 +294,8 @@ export interface PlayerOptions {
   renderers?: Record<string, PlayerElementRenderer>
   /** PPTist text is HTML. Supply a sanitizer when documents are not trusted. */
   sanitizeHtml?: (html: string) => string
+  /** Allow, rewrite, or reject (with null) external resource URLs from untrusted documents. */
+  resolveResourceUrl?: (url: string, kind: PlayerResourceKind) => string | null
   onStateChange?: (state: PlayerState) => void
   onUnsupportedElement?: (element: PlayerElement) => void
 }
@@ -182,6 +307,8 @@ export interface PresentationPlayer {
   next: () => Promise<PlayerState>
   previous: () => Promise<PlayerState>
   goTo: (slideIndex: number) => PlayerState
+  /** Restore a slide and the number of already-applied animation steps. */
+  goToStep: (slideIndex: number, stepIndex: number) => PlayerState
   resize: () => void
   destroy: () => void
 }

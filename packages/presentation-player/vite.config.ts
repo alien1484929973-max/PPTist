@@ -15,6 +15,7 @@ export default defineConfig({
       fileName: () => 'index.js',
     },
     rollupOptions: {
+      external: id => id === 'tinycolor2' || id === 'echarts' || id.startsWith('echarts/'),
       output: {
         exports: 'named',
       },

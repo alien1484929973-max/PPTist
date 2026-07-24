@@ -1,13 +1,14 @@
 {
-  "name": "@pptist/presentation-player",
-  "version": "0.1.0",
+  "name": "pptist-presentation-player",
+  "version": "0.1.0-beta.1",
   "description": "Framework-independent DOM player for PPTist presentation documents",
   "type": "module",
   "sideEffects": false,
   "files": [
     "dist",
     "src/public.d.ts",
-    "src/types.ts"
+    "src/types.ts",
+    "LICENSE"
   ],
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -21,7 +22,8 @@
   "scripts": {
     "build": "vite build",
     "test": "node --import tsx --test test/*.test.ts",
-    "prepack": "npm run build"
+    "verify": "node scripts/verify-package.mjs",
+    "prepack": "npm run build && npm run verify"
   },
   "keywords": [
     "pptist",
@@ -30,8 +32,27 @@
     "player",
     "typescript"
   ],
-  "license": "AGPL-3.0",
+  "license": "AGPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alien1484929973-max/PPTist.git",
+    "directory": "packages/presentation-player"
+  },
+  "homepage": "https://github.com/alien1484929973-max/PPTist/tree/master/packages/presentation-player",
+  "bugs": "https://github.com/alien1484929973-max/PPTist/issues",
+  "engines": {
+    "node": ">=18"
+  },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "registry": "https://registry.npmjs.org/",
+    "provenance": true
+  },
+  "dependencies": {
+    "echarts": "^6.1.0",
+    "tinycolor2": "^1.6.0"
+  },
+  "devDependencies": {
+    "happy-dom": "^20.11.1"
   }
 }

@@ -9,7 +9,9 @@
     "paths": {
       "@/*": ["./src/*"],
       "@pptist/presentation-core": ["./packages/presentation-core/src/index.ts"],
-      "@pptist/presentation-core/*": ["./packages/presentation-core/src/*"]
+      "@pptist/presentation-core/*": ["./packages/presentation-core/src/*"],
+      "@pptist/presentation-player": ["./packages/presentation-player/src/index.ts"],
+      "@pptist/presentation-player/*": ["./packages/presentation-player/src/*"]
     }
   }
 }

@@ -1,6 +1,13 @@
 <template>
   <div class="audience-view">
+    <PresentationPlayerCanvas
+      v-if="dependencyPlayerEnabled"
+      @ready="attachPresentationPlayer"
+      @stateChange="syncPresentationPlayerState"
+      @error="fallbackToClassicRenderer"
+    />
     <ScreenSlideList
+      v-else
       :slideWidth="slideWidth"
       :slideHeight="slideHeight"
       :animationIndex="animationIndex"
@@ -34,13 +41,26 @@
 import { onMounted, onUnmounted, nextTick, ref } from 'vue'
 import type { Slide } from '@/types/slides'
 import { useSlidesStore } from '@/store'
+import { useDependencyPresentationPlayer } from '@/configs/presentationPlayer'
 import useExecPlay from './hooks/useExecPlay'
 import useSlideSize from './hooks/useSlideSize'
 import ScreenSlideList from './ScreenSlideList.vue'
+import PresentationPlayerCanvas from './PresentationPlayerCanvas.vue'
 
 const slidesStore = useSlidesStore()
 const { slideWidth, slideHeight } = useSlideSize()
-const { execNext, execPrev, turnSlideToIndex, turnSlideToId, animationIndex, restoreAnimationState } = useExecPlay()
+const {
+  execNext,
+  execPrev,
+  turnSlideToIndex,
+  turnSlideToId,
+  animationIndex,
+  restoreAnimationState,
+  attachPresentationPlayer,
+  syncPresentationPlayerState,
+} = useExecPlay()
+const dependencyPlayerEnabled = ref(useDependencyPresentationPlayer())
+const fallbackToClassicRenderer = () => dependencyPlayerEnabled.value = false
 
 // 画板覆盖层状态
 const writingBoardVisible = ref(false)

@@ -96,6 +96,9 @@
           <template #content>
             <PopoverMenuItem class="popover-menu-item" @click="enterScreeningFromStart()"><i-icon-park-outline:slide-two class="icon" /> 从头开始</PopoverMenuItem>
             <PopoverMenuItem class="popover-menu-item" @click="enterScreening()"><i-icon-park-outline:ppt class="icon" /> 从当前页开始</PopoverMenuItem>
+            <Divider :margin="6" />
+            <PopoverMenuItem class="popover-menu-item" @click="enterDependencyPlayerPreview()"><i-icon-park-outline:experiment class="icon" /> 依赖播放器（默认）</PopoverMenuItem>
+            <PopoverMenuItem class="popover-menu-item" @click="enterClassicPreview()"><i-icon-park-outline:undo class="icon" /> 经典 Vue 预览（回退）</PopoverMenuItem>
           </template>
           <div class="arrow-btn"><i-icon-park-outline:down class="arrow" /></div>
         </Popover>
@@ -133,6 +136,7 @@ import useScreening from '@/hooks/useScreening'
 import useImport from '@/hooks/useImport'
 import useSlideHandler from '@/hooks/useSlideHandler'
 import type { DialogForExportTypes } from '@/types/export'
+import { setPresentationRenderer } from '@/configs/presentationPlayer'
 
 import HotkeyDoc from './HotkeyDoc.vue'
 import FileInput from '@/components/FileInput.vue'
@@ -160,6 +164,16 @@ const editingTitle = ref(false)
 const titleValue = ref('')
 const titleInputRef = useTemplateRef<InstanceType<typeof Input>>('titleInputRef')
 const documentManagerVisible = ref(false)
+
+const enterDependencyPlayerPreview = () => {
+  setPresentationRenderer('player')
+  enterScreening()
+}
+
+const enterClassicPreview = () => {
+  setPresentationRenderer('vue')
+  enterScreening()
+}
 
 const startEditTitle = () => {
   titleValue.value = title.value
