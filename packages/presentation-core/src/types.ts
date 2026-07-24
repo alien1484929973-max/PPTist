@@ -51,7 +51,7 @@ export type AnimationDirection = CardinalDirection
   | 'topRight'
   | 'bottomLeft'
   | 'bottomRight'
-export type AnimationPhase = 'entrance' | 'exit' | 'emphasis'
+export type AnimationPhase = 'entrance' | 'exit' | 'emphasis' | 'motionPath'
 
 export type CanonicalAnimationEffect =
   | { kind: 'appear'; phase: 'entrance' | 'exit' }
@@ -67,6 +67,7 @@ export type CanonicalAnimationEffect =
   | { kind: 'transparency'; phase: 'emphasis'; opacity?: number }
   | { kind: 'blink'; phase: 'emphasis' }
   | { kind: 'teeter'; phase: 'emphasis'; degrees?: number }
+  | { kind: 'motionPath'; phase: 'motionPath'; path: string }
 
 export interface TimelineEffect {
   class: TimelineAnimationClass

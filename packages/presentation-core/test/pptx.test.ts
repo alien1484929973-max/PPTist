@@ -95,16 +95,44 @@ test('PPTX metadata parser retains Morph, shape identity, and element timing', a
   assert.equal(animation?.effect.compatibility, 'mapped')
   assert.deepEqual(animation?.effect.canonical, { kind: 'fade', phase: 'entrance' })
 
-  const unsupported = slide.animationTimeline?.animations[1]
-  assert.equal(unsupported?.effect.class, 'motionPath')
-  assert.equal(unsupported?.effect.motionPath, 'M 0 0 L 1 1 E')
-  assert.equal(unsupported?.effect.compatibility, 'unsupported')
+  const motion = slide.animationTimeline?.animations[1]
+  assert.equal(motion?.effect.class, 'motionPath')
+  assert.equal(motion?.effect.motionPath, 'M 0 0 L 1 1 E')
+  assert.equal(motion?.effect.compatibility, 'mapped')
+  assert.deepEqual(motion?.effect.canonical, {
+    kind: 'motionPath', phase: 'motionPath', path: 'M 0 0 L 1 1 E',
+  })
 
   const legacy = createLegacyPptAnimations(slide.animationTimeline, shapeId => shapeId === '4' ? 'element-4' : undefined)
-  assert.equal(legacy.length, 1)
+  assert.equal(legacy.length, 2)
   assert.equal(legacy[0].elId, 'element-4')
   assert.equal(legacy[0].effect, 'fadeIn')
   assert.equal(legacy[0].delay, 250)
+  assert.equal(legacy[1].type, 'motion')
+  assert.equal(legacy[1].effect, 'motionPath')
+  assert.equal(legacy[1].motionPath, 'M 0 0 L 1 1 E')
+  assert.equal(legacy[1].target?.elementId, 'element-4')
+})
+
+test('PPTX import preserves paragraph and character animation targets', async () => {
+  const scopedXml = slideXml.replace(
+    '<p:spTgt spid="4"/>',
+    '<p:spTgt spid="4"><p:pRg st="1" end="2"/><p:charRg st="3" end="6"/></p:spTgt>',
+  )
+  const zip = new JSZip()
+  zip.file('ppt/slides/slide1.xml', scopedXml)
+  const buffer = await zip.generateAsync({ type: 'arraybuffer' })
+  const result = await parsePptxImportMetadata(buffer, xmlRuntime)
+  const animation = result.slides[0].animationTimeline?.animations[0]
+
+  assert.deepEqual(animation?.target.paragraphRange, { start: 1, end: 2 })
+  assert.deepEqual(animation?.target.characterRange, { start: 3, end: 6 })
+  assert.equal(animation?.effect.compatibility, 'approximate')
+
+  const legacy = createLegacyPptAnimations(result.slides[0].animationTimeline, () => 'element-4')
+  assert.deepEqual(legacy[0].target?.paragraphRange, { start: 1, end: 2 })
+  assert.deepEqual(legacy[0].target?.characterRange, { start: 3, end: 6 })
+  assert.equal(legacy[0].target?.elementId, 'element-4')
 })
 
 const wipeSlideXml = (direction: 'left' | 'right' | 'up' | 'down', phase: 'entr' | 'exit') => `<?xml version="1.0" encoding="UTF-8"?>

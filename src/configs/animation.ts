@@ -97,6 +97,7 @@ export const ATTENTION_ANIMATIONS: ElementAnimationGroup[] = [
 ]
 
 const EFFECT_LABELS: Record<string, string> = {
+  motionPath: '运动路径',
   appear: '出现',
   disappear: '消失',
   fadeIn: '淡入',

@@ -1,16 +1,18 @@
-import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { throttle } from 'lodash'
 import { storeToRefs } from 'pinia'
 import { useSlidesStore } from '@/store'
 import { KEYS } from '@/configs/hotkey'
 import message from '@/utils/message'
-import type { Slide } from '@/types/slides'
+import type { PPTAnimation, Slide } from '@/types/slides'
 import {
   resetElementAnimation,
   runElementAnimation,
+  setElementAnimationInitialState,
   setElementAnimationFinalState,
   type ElementAnimationHandle,
 } from '@/utils/elementAnimation'
+import type { DomAnimationTargets } from '@pptist/presentation-core'
 
 const AUDIENCE_SYNC_CHANNEL = 'pptist-audience-sync'
 
@@ -59,16 +61,39 @@ export default () => {
   const inAnimation = ref(false)
   const runningAnimations = new Set<ElementAnimationHandle>()
   const completedAnimations = new Map<string, ElementAnimationHandle>()
+  const preparedTargets = new Map<string, DomAnimationTargets>()
   let executionGeneration = 0
 
   const animationElement = (elementId: string) => {
     return document.querySelector<HTMLElement>(`#screen-element-${elementId} [class^=base-element-]`)
   }
 
+  const hasScopedTextTarget = (animation: PPTAnimation) => {
+    return !!(animation.target?.paragraphRange || animation.target?.characterRange || animation.target?.paragraphIndex !== undefined)
+  }
+
+  const cleanupPreparedTargets = () => {
+    for (const targets of preparedTargets.values()) targets.cleanup()
+    preparedTargets.clear()
+  }
+
+  const initializePendingTargetStates = () => {
+    cleanupPreparedTargets()
+    for (let index = animationIndex.value; index < formatedAnimations.value.length; index++) {
+      for (const animation of formatedAnimations.value[index].animations) {
+        if (animation.type !== 'in' || !hasScopedTextTarget(animation)) continue
+        const element = animationElement(animation.elId)
+        if (!element) continue
+        preparedTargets.set(animation.id, setElementAnimationInitialState(element, animation))
+      }
+    }
+  }
+
   const cancelElementAnimations = () => {
     executionGeneration += 1
     for (const handle of runningAnimations) handle.cancel()
     for (const handle of completedAnimations.values()) handle.restore()
+    cleanupPreparedTargets()
     runningAnimations.clear()
     completedAnimations.clear()
     inAnimation.value = false
@@ -109,7 +134,13 @@ export default () => {
         continue
       }
       completedAnimations.get(animation.id)?.restore()
-      const handle = runElementAnimation(elRef, animation)
+      const targets = preparedTargets.get(animation.id)
+      if (targets) preparedTargets.delete(animation.id)
+      const handle = runElementAnimation(elRef, animation, {
+        viewportWidth: viewportSize.value,
+        viewportHeight: viewportSize.value * viewportRatio.value,
+        targets,
+      })
       runningAnimations.add(handle)
       handle.finished.then(() => {
         runningAnimations.delete(handle)
@@ -122,6 +153,7 @@ export default () => {
   }
 
   onMounted(() => {
+    initializePendingTargetStates()
     const firstAnimations = formatedAnimations.value[0]
     if (firstAnimations && firstAnimations.animations.length) {
       const autoExecFirstAnimations = firstAnimations.animations.every(item => item.trigger === 'auto' || item.trigger === 'meantime')
@@ -139,9 +171,11 @@ export default () => {
         if (animation.type !== 'out') continue
         const elRef = animationElement(animation.elId)
         if (!elRef) continue
-        setElementAnimationFinalState(elRef, animation)
+        completedAnimations.get(animation.id)?.restore()
+        completedAnimations.set(animation.id, setElementAnimationFinalState(elRef, animation))
       }
     }
+    initializePendingTargetStates()
   }
 
   // 撤销元素动画，除了将索引前移外，还需要清除动画状态
@@ -164,6 +198,8 @@ export default () => {
       else resetElementAnimation(elRef)
     }
 
+    initializePendingTargetStates()
+
     // 如果撤销时该位置有且仅有强调动画，则继续执行一次撤销
     if (animations.every(item => item.type === 'attention')) execPrev(false)
   }
@@ -179,7 +215,10 @@ export default () => {
   onUnmounted(closeAutoPlay)
   onUnmounted(cancelElementAnimations)
 
-  watch(slideIndex, () => cancelElementAnimations())
+  watch(slideIndex, () => {
+    cancelElementAnimations()
+    nextTick(initializePendingTargetStates)
+  })
 
   // 循环放映
   const loopPlay = ref(false)

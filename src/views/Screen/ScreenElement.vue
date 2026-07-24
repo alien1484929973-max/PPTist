@@ -79,7 +79,10 @@ const needWaitAnimation = computed(() => {
   // 若该元素未执行过动画，获取其将要执行的第一个动画
   // 若将要执行的第一个动画为入场，则需要隐藏，否则无须隐藏
   const firstAnimation = formatedAnimations.value[elementIndexInAnimation].animations.find(item => item.elId === props.elementInfo.id)
-  if (firstAnimation?.type === 'in') return true
+  const scopedTarget = firstAnimation?.target?.paragraphRange ||
+    firstAnimation?.target?.characterRange ||
+    firstAnimation?.target?.paragraphIndex !== undefined
+  if (firstAnimation?.type === 'in' && !scopedTarget) return true
   return false
 })
 

@@ -1,4 +1,4 @@
-import type { AnimationTimeline, TimelineAnimation, TimelineTrigger } from './types'
+import type { AnimationTimeline, TimelineAnimation, TimelineTarget, TimelineTrigger } from './types'
 
 export interface AnimationStep<T> {
   animations: T[]
@@ -6,6 +6,18 @@ export interface AnimationStep<T> {
 }
 
 export type TimelineStep = AnimationStep<TimelineAnimation>
+
+export const timelineTargetKey = (target: TimelineTarget) => {
+  const element = target.elementId || target.sourceShapeId
+  if (!element) return undefined
+  const paragraph = target.paragraphRange
+    ? `${target.paragraphRange.start}:${target.paragraphRange.end}`
+    : target.paragraphIndex === undefined ? '*' : `${target.paragraphIndex}:${target.paragraphIndex}`
+  const character = target.characterRange
+    ? `${target.characterRange.start}:${target.characterRange.end}`
+    : '*'
+  return `${element}|p:${paragraph}|c:${character}`
+}
 
 export interface PlayableSlide {
   id: string
@@ -52,7 +64,7 @@ export const compileTimeline = (timeline?: AnimationTimeline): TimelineStep[] =>
   return compileAnimationSteps(
     timeline.animations,
     animation => animation.timing.trigger,
-    animation => animation.target.elementId || animation.target.sourceShapeId,
+    animation => timelineTargetKey(animation.target),
   )
 }
 

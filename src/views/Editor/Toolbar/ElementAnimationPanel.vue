@@ -63,6 +63,7 @@
             <div class="index">{{element.index}}</div>
             <div class="text">
               「{{element.elType}}」{{element.animationEffect}}
+              <span class="direction" v-if="element.targetLabel"> · {{element.targetLabel}}</span>
               <span class="direction" v-if="element.directionLabel"> · {{element.directionLabel}}</span>
             </div>
             <div class="handler">
@@ -212,22 +213,25 @@ import Switch from '@/components/Switch.vue'
 import Popover from '@/components/Popover.vue'
 
 interface TabItem {
-  key: AnimationType
+  key: EditableAnimationType
   label: string
   color: string
 }
+
+type EditableAnimationType = Exclude<AnimationType, 'motion'>
 
 interface SequenceAnimation extends PPTAnimation {
   index: number | ''
   elType: string
   animationEffect: string
+  targetLabel: string
   directionLabel: string
 }
 
-const animationTypes: AnimationType[] = ['in', 'out', 'attention']
+const animationTypes: EditableAnimationType[] = ['in', 'out', 'attention']
 const slidesStore = useSlidesStore()
 const { handleElement, handleElementId } = storeToRefs(useMainStore())
-const { currentSlide, formatedAnimations, currentSlideAnimations } = storeToRefs(slidesStore)
+const { currentSlide, formatedAnimations, currentSlideAnimations, viewportSize, viewportRatio } = storeToRefs(slidesStore)
 const { addHistorySnapshot } = useHistorySnapshot()
 const { selectElement } = useSelectElement()
 
@@ -236,7 +240,7 @@ const tabs: TabItem[] = [
   { key: 'out', label: '退场', color: '#d86344' },
   { key: 'attention', label: '强调', color: '#e8b76a' },
 ]
-const activeTab = ref<AnimationType>('in')
+const activeTab = ref<EditableAnimationType>('in')
 const animateIn = ref(false)
 const animationPoolVisible = ref(false)
 const activeAnimationId = ref('')
@@ -259,11 +263,19 @@ const toTimelineAnimation = (
   animation: PPTAnimation,
   existing?: TimelineAnimation,
 ): TimelineAnimation => {
-  const canonical = canonicalEffectFromLegacy(animation.effect, animation.type, animation.direction)
+  const canonical = canonicalEffectFromLegacy(
+    animation.effect,
+    animation.type,
+    animation.direction,
+    animation.motionPath,
+  )
+  const hasScopedTarget = !!(animation.target?.paragraphRange ||
+    animation.target?.characterRange ||
+    animation.target?.paragraphIndex !== undefined)
   return {
     ...existing,
     id: animation.id,
-    target: { ...existing?.target, elementId: animation.elId },
+    target: { ...existing?.target, ...animation.target, elementId: animation.elId },
     timing: {
       duration: animation.duration,
       delay: animation.delay || 0,
@@ -274,9 +286,14 @@ const toTimelineAnimation = (
     },
     effect: {
       ...existing?.effect,
-      class: animation.type === 'in' ? 'entrance' : animation.type === 'out' ? 'exit' : 'emphasis',
-      compatibility: canonical ? 'mapped' : existing?.effect.compatibility || 'approximate',
+      class: animation.type === 'motion'
+        ? 'motionPath'
+        : animation.type === 'in' ? 'entrance' : animation.type === 'out' ? 'exit' : 'emphasis',
+      compatibility: canonical
+        ? hasScopedTarget ? 'approximate' : 'mapped'
+        : existing?.effect.compatibility || 'approximate',
       direction: canonical && 'direction' in canonical ? canonical.direction : undefined,
+      motionPath: animation.type === 'motion' ? animation.motionPath : undefined,
       canonical,
     },
   }
@@ -316,6 +333,11 @@ const animationSequence = computed<SequenceAnimation[]>(() => {
         index: j === 0 ? i + 1 : '',
         elType: ELEMENT_TYPE_ZH[element.type],
         animationEffect: getAnimationEffectLabel(animation.effect, animation.type),
+        targetLabel: animation.target?.characterRange
+          ? `字符 ${animation.target.characterRange.start + 1}–${animation.target.characterRange.end + 1}`
+          : animation.target?.paragraphRange
+            ? `段落 ${animation.target.paragraphRange.start + 1}–${animation.target.paragraphRange.end + 1}`
+            : animation.target?.paragraphIndex === undefined ? '' : `段落 ${animation.target.paragraphIndex + 1}`,
         directionLabel: getAnimationDirectionLabel(animation),
       })
     }
@@ -352,7 +374,10 @@ const animationElement = (elementId: string) => {
 
 const runAnimation = (animation: PPTAnimation, target = animationElement(animation.elId)) => {
   if (!target) return undefined
-  return runElementAnimation(target, animation)
+  return runElementAnimation(target, animation, {
+    viewportWidth: viewportSize.value,
+    viewportHeight: viewportSize.value * viewportRatio.value,
+  })
 }
 
 const previewAnimation = (animation: PPTAnimation) => {
@@ -365,7 +390,7 @@ const stopPoolPreview = () => {
   poolPreviewHandle?.restore()
   poolPreviewHandle = undefined
 }
-const previewPoolAnimation = (event: MouseEvent, type: AnimationType, effect: string) => {
+const previewPoolAnimation = (event: MouseEvent, type: EditableAnimationType, effect: string) => {
   stopPoolPreview()
   const target = event.currentTarget as HTMLElement
   const handle = runElementAnimation(target, {
@@ -438,7 +463,7 @@ const updateElementAnimationDirection = (id: string, direction: AnimationDirecti
   window.setTimeout(() => previewAnimation({ ...animation, effect: normalizeAnimationEffectId(animation.effect, animation.type), direction }), 0)
 }
 
-const updateElementAnimation = (type: AnimationType, effect: string) => {
+const updateElementAnimation = (type: EditableAnimationType, effect: string) => {
   let changed: PPTAnimation | undefined
   const animations = currentSlideAnimations.value.map(item => {
     if (item.id !== handleAnimationId.value) return item
@@ -446,6 +471,7 @@ const updateElementAnimation = (type: AnimationType, effect: string) => {
       ...item,
       type,
       effect,
+      motionPath: undefined,
       direction: defaultDirectionForEffect(effect, type),
     }
     return changed
@@ -458,7 +484,7 @@ const updateElementAnimation = (type: AnimationType, effect: string) => {
   if (changed) window.setTimeout(() => previewAnimation(changed!), 0)
 }
 
-const addAnimation = (type: AnimationType, effect: string) => {
+const addAnimation = (type: EditableAnimationType, effect: string) => {
   if (handleAnimationId.value) {
     updateElementAnimation(type, effect)
     return
@@ -491,7 +517,8 @@ const handlePopoverVisibleChange = (visible: boolean) => {
 
 const openAnimationPool = (animationId: string) => {
   const animation = currentSlideAnimations.value.find(item => item.id === animationId)
-  if (animation) activeTab.value = animation.type
+  if (animation && animation.type !== 'motion') activeTab.value = animation.type
+  else activeTab.value = 'in'
   animationPoolVisible.value = true
   handleAnimationId.value = animationId
   handlePopoverVisibleChange(true)
@@ -508,6 +535,7 @@ const animations = {
 $inColor: #68a490;
 $outColor: #d86344;
 $attentionColor: #e8b76a;
+$motionColor: #6f7fc6;
 
 .element-animation-panel {
   height: 100%;
@@ -620,6 +648,9 @@ $attentionColor: #e8b76a;
   }
   &.attention.active {
     border-color: $attentionColor;
+  }
+  &.motion.active {
+    border-color: $motionColor;
   }
   &.active {
     height: auto;

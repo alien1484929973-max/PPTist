@@ -104,3 +104,17 @@ test('native emphasis plans cover pulse, transparency, blink and teeter', () => 
   assert.equal(createAnimationPlan({ kind: 'blink', phase: 'emphasis' }, timing).keyframes.length, 5)
   assert.equal(createAnimationPlan({ kind: 'teeter', phase: 'emphasis' }, timing).keyframes.length, 4)
 })
+
+test('motion path plans use slide dimensions without changing visibility', () => {
+  const plan = createAnimationPlan(
+    { kind: 'motionPath', phase: 'motionPath', path: 'M 0 0 L .5 1 E' },
+    { duration: 1200, delay: 100, trigger: 'click' },
+    { viewportWidth: 1000, viewportHeight: 500 },
+  )
+  assert.deepEqual(plan.keyframes, [
+    { transform: 'translate3d(0px, 0px, 0)', offset: 0 },
+    { transform: 'translate3d(500px, 500px, 0)', offset: 1 },
+  ])
+  assert.equal(plan.initialVisibility, 'visible')
+  assert.equal(plan.finalVisibility, 'visible')
+})

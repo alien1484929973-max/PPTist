@@ -3,6 +3,7 @@ import type {
   AnimationTimeline,
   PptxElementSource,
   SlideTransition,
+  TimelineTarget,
 } from '@pptist/presentation-core'
 
 export const enum ShapePathFormulasKeys {
@@ -679,7 +680,7 @@ export interface PPTAudioElement extends PPTBaseElement {
 
 export type PPTElement = PPTTextElement | PPTImageElement | PPTShapeElement | PPTLineElement | PPTChartElement | PPTTableElement | PPTLatexElement | PPTVideoElement | PPTAudioElement
 
-export type AnimationType = 'in' | 'out' | 'attention'
+export type AnimationType = 'in' | 'out' | 'attention' | 'motion'
 export type AnimationTrigger = 'click' | 'meantime' | 'auto'
 
 /**
@@ -691,7 +692,7 @@ export type AnimationTrigger = 'click' | 'meantime' | 'auto'
  * 
  * effect: 动画效果
  * 
- * type: 动画类型（入场、退场、强调）
+ * type: 动画类型（入场、退场、强调、运动路径）
  * 
  * duration: 动画持续时间
  * 
@@ -702,6 +703,8 @@ export interface PPTAnimation {
   elId: string
   effect: string
   direction?: AnimationDirection
+  motionPath?: string
+  target?: TimelineTarget
   type: AnimationType
   duration: number
   trigger: AnimationTrigger

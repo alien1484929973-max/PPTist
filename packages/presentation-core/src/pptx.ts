@@ -7,9 +7,11 @@ import type {
   SlideTransition,
   TimelineAnimation,
   TimelineAnimationClass,
+  TimelineTarget,
   TimelineTrigger,
 } from './types'
 import { canonicalEffectFromTimeline, directionFromName } from './effects'
+import { parsePptxMotionPath } from './motionPath'
 
 export interface PptxSourceElementMetadata extends PptxElementSource {
   order: number
@@ -37,13 +39,15 @@ export interface LegacyPptAnimation {
   elId: string
   effect: string
   direction?: AnimationDirection
-  type: 'in' | 'out' | 'attention'
+  type: 'in' | 'out' | 'attention' | 'motion'
   duration: number
   trigger: 'click' | 'meantime' | 'auto'
   delay?: number
   repeatCount?: number
   autoReverse?: boolean
   easing?: string
+  motionPath?: string
+  target?: TimelineTarget
   source: {
     provider: 'pptx'
     presetClass?: string
@@ -222,6 +226,8 @@ const parseTimeline = (document: XMLDocument, xmlRuntime: PptxXmlRuntime): Anima
       .find(value => value && value !== 'indefinite')
     const durationValue = getAttribute(timeNode, 'dur')
     const parsedAnimationClass = animationClass(presetClass)
+    const motionPath = getAttribute(motion, 'path')
+    const validMotionPath = motionPath && parsePptxMotionPath(motionPath).length >= 2
     const presetId = finiteNumber(getAttribute(timeNode, 'presetID')) || undefined
     const repeatCount = parseRepeatCount(getAttribute(timeNode, 'repeatCount'))
     const autoReverse = getAttribute(timeNode, 'autoRev') === '1'
@@ -235,7 +241,10 @@ const parseTimeline = (document: XMLDocument, xmlRuntime: PptxXmlRuntime): Anima
     const phase = effectTransition === 'out' || parsedAnimationClass === 'exit' ? 'exit' : 'entrance'
     const visibilityEffect = parsedAnimationClass === 'entrance' || parsedAnimationClass === 'exit'
     let canonical: CanonicalAnimationEffect | undefined
-    if (visibilityEffect && isWipe && parsedDirection && ['left', 'right', 'up', 'down'].includes(parsedDirection)) {
+    if (parsedAnimationClass === 'motionPath' && motionPath && validMotionPath) {
+      canonical = { kind: 'motionPath', phase: 'motionPath', path: motionPath }
+    }
+    else if (visibilityEffect && isWipe && parsedDirection && ['left', 'right', 'up', 'down'].includes(parsedDirection)) {
       canonical = {
         kind: 'wipe',
         phase,
@@ -250,11 +259,13 @@ const parseTimeline = (document: XMLDocument, xmlRuntime: PptxXmlRuntime): Anima
     const hasLegacyEquivalent = (parsedAnimationClass === 'entrance' || parsedAnimationClass === 'exit') && (
       !!canonical || presetId === 32
     )
-    let compatibility: TimelineAnimation['effect']['compatibility'] = parsedAnimationClass === 'motionPath' || parsedAnimationClass === 'media' || parsedAnimationClass === 'unknown'
+    let compatibility: TimelineAnimation['effect']['compatibility'] = parsedAnimationClass === 'media' ||
+      parsedAnimationClass === 'unknown' ||
+      (parsedAnimationClass === 'motionPath' && !validMotionPath)
       ? 'unsupported'
       : paragraphRange || characterRange
         ? 'approximate'
-        : hasLegacyEquivalent ? 'mapped' : 'approximate'
+        : hasLegacyEquivalent || !!canonical ? 'mapped' : 'approximate'
     if (compatibility === 'mapped' && repeatCount === -1) compatibility = 'approximate'
 
     animations.push({
@@ -292,7 +303,7 @@ const parseTimeline = (document: XMLDocument, xmlRuntime: PptxXmlRuntime): Anima
         direction: parsedDirection,
         transition: effectTransition === 'in' || effectTransition === 'out' ? effectTransition : undefined,
         canonical,
-        motionPath: getAttribute(motion, 'path'),
+        motionPath,
         rotateBy: getAttribute(rotation, 'by') ? finiteNumber(getAttribute(rotation, 'by')) / 60000 : undefined,
         scaleBy: scaleBy ? {
           x: finiteNumber(getAttribute(scaleBy, 'x'), 100000) / 100000,
@@ -336,6 +347,7 @@ const legacyEffect = (animation: TimelineAnimation) => {
   if (canonical?.kind === 'fly') return leaving ? 'flyOut' : 'flyIn'
   if (canonical?.kind === 'zoom') return leaving ? 'zoomOut' : 'zoomIn'
   if (canonical?.kind === 'bounce') return leaving ? 'bounceOut' : 'bounceIn'
+  if (canonical?.kind === 'motionPath') return 'motionPath'
   if (animation.effect.class === 'emphasis') return 'pulse'
   if (presetId === 32) {
     return leaving
@@ -363,9 +375,11 @@ export const createLegacyPptAnimations = (
       elId,
       effect: legacyEffect(animation),
       direction: canonical && 'direction' in canonical ? canonical.direction : undefined,
-      type: animation.effect.class === 'exit'
-        ? 'out'
-        : animation.effect.class === 'emphasis' ? 'attention' : 'in',
+      type: animation.effect.class === 'motionPath'
+        ? 'motion'
+        : animation.effect.class === 'exit'
+          ? 'out'
+          : animation.effect.class === 'emphasis' ? 'attention' : 'in',
       duration: animation.timing.duration,
       trigger: animation.timing.trigger === 'withPrevious'
         ? 'meantime'
@@ -376,6 +390,8 @@ export const createLegacyPptAnimations = (
       easing: animation.timing.acceleration && animation.timing.deceleration
         ? 'ease-in-out'
         : animation.timing.acceleration ? 'ease-in' : animation.timing.deceleration ? 'ease-out' : undefined,
+      motionPath: animation.effect.motionPath,
+      target: { ...animation.target, elementId: elId },
       source: {
         provider: 'pptx',
         presetClass: animation.effect.class,

@@ -1,8 +1,11 @@
 import {
   canonicalEffectFromLegacy,
   createAnimationPlan,
+  resolveDomAnimationTargets,
   runDomAnimation,
   setDomAnimationFinalState,
+  type AnimationPlanContext,
+  type DomAnimationTargets,
 } from '@pptist/presentation-core'
 import { ANIMATION_CLASS_PREFIX } from '@/configs/animation'
 import type { PPTAnimation } from '@/types/slides'
@@ -11,6 +14,10 @@ export interface ElementAnimationHandle {
   finished: Promise<void>
   cancel: () => void
   restore: () => void
+}
+
+export interface ElementAnimationContext extends AnimationPlanContext {
+  targets?: DomAnimationTargets
 }
 
 interface InlineStyleSnapshot {
@@ -34,11 +41,35 @@ const restoreStyles = (element: HTMLElement, snapshot: InlineStyleSnapshot) => {
   element.style.transform = snapshot.transform
 }
 
-const nativeAnimation = (
-  element: HTMLElement,
+const combineHandles = (
+  handles: ElementAnimationHandle[],
+  cleanup: () => void,
+): ElementAnimationHandle => {
+  let restored = false
+  const restore = () => {
+    if (restored) return
+    restored = true
+    for (const handle of handles) handle.restore()
+    cleanup()
+  }
+  return {
+    finished: Promise.all(handles.map(handle => handle.finished)).then(() => undefined),
+    cancel: restore,
+    restore,
+  }
+}
+
+const nativeAnimations = (
+  elements: HTMLElement[],
   animation: PPTAnimation,
-): ElementAnimationHandle | undefined => {
-  const effect = canonicalEffectFromLegacy(animation.effect, animation.type, animation.direction)
+  context: AnimationPlanContext,
+): ElementAnimationHandle[] | undefined => {
+  const effect = canonicalEffectFromLegacy(
+    animation.effect,
+    animation.type,
+    animation.direction,
+    animation.motionPath,
+  )
   if (!effect) return undefined
   const plan = createAnimationPlan(effect, {
     duration: animation.duration,
@@ -47,8 +78,10 @@ const nativeAnimation = (
     repeatCount: animation.repeatCount,
     autoReverse: animation.autoReverse,
     easing: animation.easing,
-  })
-  return runDomAnimation(element, plan)
+  }, context)
+  const handles = elements.map(element => runDomAnimation(element, plan))
+  if (handles.some(handle => !handle)) return undefined
+  return handles as ElementAnimationHandle[]
 }
 
 const legacyAnimation = (element: HTMLElement, animation: PPTAnimation): ElementAnimationHandle => {
@@ -109,10 +142,42 @@ const legacyAnimation = (element: HTMLElement, animation: PPTAnimation): Element
 export const runElementAnimation = (
   element: HTMLElement,
   animation: PPTAnimation,
-): ElementAnimationHandle => nativeAnimation(element, animation) || legacyAnimation(element, animation)
+  context: ElementAnimationContext = {},
+): ElementAnimationHandle => {
+  const targets = context.targets || resolveDomAnimationTargets(element, animation.target)
+  const nativeHandles = nativeAnimations(targets.elements, animation, context)
+  const handles = nativeHandles || targets.elements.map(target => legacyAnimation(target, animation))
+  return combineHandles(handles, targets.cleanup)
+}
 
-export const setElementAnimationFinalState = (element: HTMLElement, animation: PPTAnimation) => {
-  const effect = canonicalEffectFromLegacy(animation.effect, animation.type, animation.direction)
+export const prepareElementAnimationTargets = (
+  element: HTMLElement,
+  animation: PPTAnimation,
+) => resolveDomAnimationTargets(element, animation.target)
+
+export const setElementAnimationInitialState = (
+  element: HTMLElement,
+  animation: PPTAnimation,
+): DomAnimationTargets => {
+  const targets = prepareElementAnimationTargets(element, animation)
+  if (animation.type === 'in') {
+    for (const target of targets.elements) target.style.visibility = 'hidden'
+  }
+  return targets
+}
+
+export const setElementAnimationFinalState = (
+  element: HTMLElement,
+  animation: PPTAnimation,
+): ElementAnimationHandle => {
+  const targets = prepareElementAnimationTargets(element, animation)
+  const snapshots = targets.elements.map(snapshotStyles)
+  const effect = canonicalEffectFromLegacy(
+    animation.effect,
+    animation.type,
+    animation.direction,
+    animation.motionPath,
+  )
   if (effect) {
     const plan = createAnimationPlan(effect, {
       duration: 0,
@@ -120,13 +185,31 @@ export const setElementAnimationFinalState = (element: HTMLElement, animation: P
       trigger: 'click',
       autoReverse: animation.autoReverse,
     })
-    setDomAnimationFinalState(element, plan)
-    return
+    for (const target of targets.elements) setDomAnimationFinalState(target, plan)
   }
-  if (animation.type === 'out') {
-    element.classList.add(`${ANIMATION_CLASS_PREFIX}${animation.effect}`, `${ANIMATION_CLASS_PREFIX}animated`)
-    element.style.setProperty('--animate-duration', '0ms')
+  else if (animation.type === 'out') {
+    for (const target of targets.elements) {
+      target.classList.add(`${ANIMATION_CLASS_PREFIX}${animation.effect}`, `${ANIMATION_CLASS_PREFIX}animated`)
+      target.style.setProperty('--animate-duration', '0ms')
+    }
   }
+  let restored = false
+  const restore = () => {
+    if (restored) return
+    restored = true
+    targets.elements.forEach((target, index) => {
+      if (!effect) {
+        target.classList.remove(
+          `${ANIMATION_CLASS_PREFIX}${animation.effect}`,
+          `${ANIMATION_CLASS_PREFIX}animated`,
+        )
+        target.style.removeProperty('--animate-duration')
+      }
+      restoreStyles(target, snapshots[index])
+    })
+    targets.cleanup()
+  }
+  return { finished: Promise.resolve(), cancel: restore, restore }
 }
 
 export const resetElementAnimation = (element: HTMLElement) => {

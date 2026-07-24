@@ -6,6 +6,7 @@ import type {
   TimelineAnimation,
   TimelineTiming,
 } from './types'
+import { createMotionPathKeyframes } from './motionPath'
 
 export type AnimationPlanKeyframe = Record<string, string | number>
 
@@ -23,6 +24,12 @@ export interface AnimationPlan {
   options: AnimationPlanOptions
   initialVisibility: 'visible' | 'hidden'
   finalVisibility: 'visible' | 'hidden'
+  finalStyles?: AnimationPlanKeyframe
+}
+
+export interface AnimationPlanContext {
+  viewportWidth?: number
+  viewportHeight?: number
 }
 
 const CARDINAL_DIRECTIONS: readonly CardinalDirection[] = ['left', 'right', 'up', 'down']
@@ -88,11 +95,25 @@ const normalizeOptions = (timing: Partial<TimelineTiming>): AnimationPlanOptions
 export const createAnimationPlan = (
   effect: CanonicalAnimationEffect,
   timing: Partial<TimelineTiming> = {},
+  context: AnimationPlanContext = {},
 ): AnimationPlan => {
   const phase = effect.phase
   let keyframes: AnimationPlanKeyframe[]
 
-  if (effect.kind === 'appear') {
+  if (effect.kind === 'motionPath') {
+    keyframes = createMotionPathKeyframes(
+      effect.path,
+      context.viewportWidth,
+      context.viewportHeight,
+    )
+    if (!keyframes.length) {
+      keyframes = [
+        { transform: 'translate3d(0, 0, 0)', offset: 0 },
+        { transform: 'translate3d(0, 0, 0)', offset: 1 },
+      ]
+    }
+  }
+  else if (effect.kind === 'appear') {
     // PowerPoint's Appear/Disappear is a visibility change, not a one-second fade.
     keyframes = [
       { opacity: 0, offset: 0 },
@@ -188,11 +209,17 @@ export const createAnimationPlan = (
   const finalVisibility = timing.autoReverse
     ? initialVisibility
     : phase === 'exit' ? 'hidden' : 'visible'
+  const finalStyles = effect.kind === 'motionPath'
+    ? Object.fromEntries(Object.entries(
+      timing.autoReverse ? keyframes[0] : keyframes[keyframes.length - 1],
+    ).filter(([property]) => property !== 'offset')) as AnimationPlanKeyframe
+    : undefined
   return {
     keyframes: visibilityPhase ? reverseForExit(phase, keyframes) : keyframes,
     options: normalizeOptions(timing),
     initialVisibility,
     finalVisibility,
+    finalStyles,
   }
 }
 
@@ -215,8 +242,9 @@ export const directionFromName = (value: string): AnimationDirection | undefined
 
 export const normalizeAnimationEffectId = (
   effect: string,
-  type: 'in' | 'out' | 'attention',
+  type: 'in' | 'out' | 'attention' | 'motion',
 ) => {
+  if (type === 'motion') return 'motionPath'
   const phaseSuffix = type === 'out' ? 'Out' : 'In'
   if (/^wipe(In|Out)/.test(effect)) return `wipe${phaseSuffix}`
   if (/^fly(In|Out)/.test(effect)) return `fly${phaseSuffix}`
@@ -233,7 +261,7 @@ export const normalizeAnimationEffectId = (
 
 export const supportedDirectionsForEffect = (
   effect: string,
-  type: 'in' | 'out' | 'attention',
+  type: 'in' | 'out' | 'attention' | 'motion',
 ): readonly AnimationDirection[] => {
   const normalized = normalizeAnimationEffectId(effect, type)
   if (normalized === 'flyIn' || normalized === 'flyOut') return FLY_DIRECTIONS
@@ -244,7 +272,7 @@ export const supportedDirectionsForEffect = (
 
 export const defaultDirectionForEffect = (
   effect: string,
-  type: 'in' | 'out' | 'attention',
+  type: 'in' | 'out' | 'attention' | 'motion',
 ): AnimationDirection | undefined => {
   const normalized = normalizeAnimationEffectId(effect, type)
   if (normalized === 'flyIn' || normalized === 'flyOut') return 'down'
@@ -256,15 +284,19 @@ export const defaultDirectionForEffect = (
 
 export const resolveAnimationDirection = (
   effect: string,
-  type: 'in' | 'out' | 'attention',
+  type: 'in' | 'out' | 'attention' | 'motion',
   explicit?: AnimationDirection,
 ) => explicit || directionFromName(effect) || defaultDirectionForEffect(effect, type)
 
 export const canonicalEffectFromLegacy = (
   effect: string,
-  type: 'in' | 'out' | 'attention',
+  type: 'in' | 'out' | 'attention' | 'motion',
   explicitDirection?: AnimationDirection,
+  motionPath?: string,
 ): CanonicalAnimationEffect | undefined => {
+  if (type === 'motion') {
+    return motionPath ? { kind: 'motionPath', phase: 'motionPath', path: motionPath } : undefined
+  }
   const phase = type === 'in' ? 'entrance' : type === 'out' ? 'exit' : 'emphasis'
   const normalized = normalizeAnimationEffectId(effect, type)
   const direction = resolveAnimationDirection(effect, type, explicitDirection)

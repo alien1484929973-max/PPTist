@@ -35,6 +35,21 @@ test('timeline compiler groups with-previous animations and marks automatic cont
   ])
 })
 
+test('timeline compiler keeps simultaneous paragraph targets on the same element', () => {
+  const scopedTimeline: AnimationTimeline = {
+    version: 1,
+    animations: [
+      { ...animation('paragraph-one', 'click'), target: { elementId: 'text', paragraphIndex: 0 } },
+      { ...animation('paragraph-two', 'withPrevious'), target: { elementId: 'text', paragraphIndex: 1 } },
+      { ...animation('replace-two', 'withPrevious'), target: { elementId: 'text', paragraphIndex: 1 } },
+    ],
+  }
+  assert.deepEqual(
+    compileTimeline(scopedTimeline)[0].animations.map(item => item.id),
+    ['paragraph-one', 'replace-two'],
+  )
+})
+
 test('player controller advances animation steps before changing slides', () => {
   const controller = new PresentationPlayerController()
   controller.load([{ id: 'one', animationTimeline: timeline }, { id: 'two' }])

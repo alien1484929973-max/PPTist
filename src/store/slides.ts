@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { omit } from 'lodash'
-import { compileAnimationSteps, type TimelineTrigger } from '@pptist/presentation-core'
+import { compileAnimationSteps, timelineTargetKey, type TimelineTrigger } from '@pptist/presentation-core'
 import type { Slide, SlideTheme, PPTElement, PPTAnimation, SlideTemplate } from '@/types/slides'
 
 interface RemovePropData {
@@ -95,7 +95,10 @@ export const useSlidesStore = defineStore('slides', {
         if (animation.trigger === 'auto') return 'afterPrevious'
         return 'click'
       }
-      return compileAnimationSteps(animations, triggerOf, animation => animation.elId).map((step): FormatedAnimation => ({
+      return compileAnimationSteps(animations, triggerOf, animation => timelineTargetKey({
+        ...animation.target,
+        elementId: animation.elId,
+      })).map((step): FormatedAnimation => ({
         animations: step.animations,
         autoNext: step.autoAdvance,
       }))
