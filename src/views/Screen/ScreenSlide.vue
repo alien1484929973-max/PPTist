@@ -8,15 +8,50 @@
     }"
   >
     <div class="background" :style="{ ...backgroundStyle }"></div>
-    <ScreenElement
-      v-for="(element, index) in slide.elements"
-      :key="element.id"
-      :elementInfo="element"
-      :elementIndex="index + 1"
-      :animationIndex="animationIndex"
-      :turnSlideToId="turnSlideToId"
-      :manualExitFullscreen="manualExitFullscreen"
-    />
+    <template v-for="item in renderItems" :key="item.key">
+      <div
+        v-if="item.groupId"
+        class="screen-element-group"
+        :id="`screen-group-${item.groupId}`"
+        :data-group-id="item.groupId"
+        :style="{
+          left: item.range.minX + 'px',
+          top: item.range.minY + 'px',
+          width: Math.max(0.01, item.range.maxX - item.range.minX) + 'px',
+          height: Math.max(0.01, item.range.maxY - item.range.minY) + 'px',
+          zIndex: item.zIndex,
+          visibility: needWaitGroupAnimation(item.groupId) ? 'hidden' : 'visible',
+        }"
+      >
+        <div
+          class="screen-element-group-content"
+          :style="{
+            left: -item.range.minX + 'px',
+            top: -item.range.minY + 'px',
+            width: viewportSize + 'px',
+            height: viewportSize * viewportRatio + 'px',
+          }"
+        >
+          <ScreenElement
+            v-for="member in item.elements"
+            :key="member.element.id"
+            :elementInfo="member.element"
+            :elementIndex="member.index + 1"
+            :animationIndex="animationIndex"
+            :turnSlideToId="turnSlideToId"
+            :manualExitFullscreen="manualExitFullscreen"
+          />
+        </div>
+      </div>
+      <ScreenElement
+        v-else
+        :elementInfo="item.elements[0].element"
+        :elementIndex="item.elements[0].index + 1"
+        :animationIndex="animationIndex"
+        :turnSlideToId="turnSlideToId"
+        :manualExitFullscreen="manualExitFullscreen"
+      />
+    </template>
   </div>
 </template>
 
@@ -27,6 +62,7 @@ import { useSlidesStore } from '@/store'
 import type { Slide } from '@/types/slides'
 import { injectKeySlideId } from '@/types/injectKey'
 import useSlideBackgroundStyle from '@/hooks/useSlideBackgroundStyle'
+import { groupElementsForRender } from '@/utils/elementGroup'
 
 import ScreenElement from './ScreenElement.vue'
 
@@ -38,7 +74,18 @@ const props = defineProps<{
   manualExitFullscreen: () => void
 }>()
 
-const { viewportRatio, viewportSize } = storeToRefs(useSlidesStore())
+const { formatedAnimations, viewportRatio, viewportSize } = storeToRefs(useSlidesStore())
+
+const renderItems = computed(() => groupElementsForRender(props.slide.elements))
+
+const needWaitGroupAnimation = (groupId: string) => {
+  const stepIndex = formatedAnimations.value.findIndex(step => {
+    return step.animations.some(animation => animation.target?.groupId === groupId)
+  })
+  if (stepIndex === -1 || stepIndex < props.animationIndex) return false
+  const firstAnimation = formatedAnimations.value[stepIndex].animations.find(animation => animation.target?.groupId === groupId)
+  return firstAnimation?.type === 'in'
+}
 
 const background = computed(() => props.slide.background)
 const { backgroundStyle } = useSlideBackgroundStyle(background)
@@ -62,5 +109,18 @@ provide(injectKeySlideId, slideId)
   background-position: center;
   position: absolute;
   z-index: -1;
+}
+.screen-element-group {
+  position: absolute;
+  transform-origin: center;
+  pointer-events: none;
+
+  .screen-element-group-content {
+    position: absolute;
+  }
+
+  :deep(.screen-element) {
+    pointer-events: auto;
+  }
 }
 </style>

@@ -64,8 +64,16 @@ export default () => {
   const preparedTargets = new Map<string, DomAnimationTargets>()
   let executionGeneration = 0
 
-  const animationElement = (elementId: string) => {
-    return document.querySelector<HTMLElement>(`#screen-element-${elementId} [class^=base-element-]`)
+  const animationElement = (animation: PPTAnimation) => {
+    const slideRoot = document.querySelector<HTMLElement>('.screen-slide-list .slide-item.current')
+    if (!slideRoot) return null
+    if (animation.target?.groupId) {
+      return Array.from(slideRoot.querySelectorAll<HTMLElement>('[data-group-id]'))
+        .find(element => element.dataset.groupId === animation.target?.groupId) || null
+    }
+    const element = Array.from(slideRoot.querySelectorAll<HTMLElement>('[data-element-id]'))
+      .find(candidate => candidate.dataset.elementId === animation.elId)
+    return element?.querySelector<HTMLElement>('[class^=base-element-]') || null
   }
 
   const hasScopedTextTarget = (animation: PPTAnimation) => {
@@ -82,7 +90,7 @@ export default () => {
     for (let index = animationIndex.value; index < formatedAnimations.value.length; index++) {
       for (const animation of formatedAnimations.value[index].animations) {
         if (animation.type !== 'in' || !hasScopedTextTarget(animation)) continue
-        const element = animationElement(animation.elId)
+        const element = animationElement(animation)
         if (!element) continue
         preparedTargets.set(animation.id, setElementAnimationInitialState(element, animation))
       }
@@ -128,7 +136,7 @@ export default () => {
 
     // 依次执行该位置中的全部动画
     for (const animation of animations) {
-      const elRef = animationElement(animation.elId)
+      const elRef = animationElement(animation)
       if (!elRef) {
         completeOne()
         continue
@@ -169,7 +177,7 @@ export default () => {
       const { animations } = formatedAnimations.value[i]
       for (const animation of animations) {
         if (animation.type !== 'out') continue
-        const elRef = animationElement(animation.elId)
+        const elRef = animationElement(animation)
         if (!elRef) continue
         completedAnimations.get(animation.id)?.restore()
         completedAnimations.set(animation.id, setElementAnimationFinalState(elRef, animation))
@@ -188,7 +196,7 @@ export default () => {
     const { animations } = formatedAnimations.value[animationIndex.value]
 
     for (const animation of animations) {
-      const elRef = animationElement(animation.elId)
+      const elRef = animationElement(animation)
       if (!elRef) continue
       const handle = completedAnimations.get(animation.id)
       if (handle) {

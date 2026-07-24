@@ -28,6 +28,7 @@ export type TimelineAnimationClass = 'entrance' | 'exit' | 'emphasis' | 'motionP
 
 export interface TimelineTarget {
   elementId?: string
+  groupId?: string
   sourceShapeId?: string
   paragraphIndex?: number
   paragraphRange?: { start: number; end: number }

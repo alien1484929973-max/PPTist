@@ -1,6 +1,6 @@
 <template>
   <div class="element-animation-panel">
-    <div class="element-animation" v-if="handleElement">
+    <div class="element-animation" v-if="animationTargetAvailable">
       <Popover 
         trigger="click" 
         v-model:value="animationPoolVisible" 
@@ -135,7 +135,10 @@
               />
             </div>
             <div class="config-item">
-              <div style="width: 35%;">速度曲线：</div>
+              <div
+                style="width: 35%;"
+                v-tooltip="'控制动画在开始、途中和结束时如何加速或减速'"
+              >速度曲线：</div>
               <Select
                 :value="element.easing || 'ease'"
                 @update:value="value => updateElementAnimationEasing(element.id, String(value))"
@@ -150,7 +153,10 @@
               />
             </div>
             <div class="config-item">
-              <div style="width: 35%;">自动翻转：</div>
+              <div
+                style="width: 35%;"
+                v-tooltip="'到达终点后沿相反方向播放一次，回到起始状态'"
+              >自动翻转：</div>
               <Switch
                 :value="!!element.autoReverse"
                 @update:value="value => updateElementAnimationAutoReverse(element.id, value)"
@@ -199,6 +205,7 @@ import {
   getAnimationEffectLabel,
 } from '@/configs/animation'
 import { ELEMENT_TYPE_ZH } from '@/configs/element'
+import { isSingleGroupSelection } from '@/utils/element'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 import useSelectElement from '@/hooks/useSelectElement'
 import { runElementAnimation, type ElementAnimationHandle } from '@/utils/elementAnimation'
@@ -230,7 +237,13 @@ interface SequenceAnimation extends PPTAnimation {
 
 const animationTypes: EditableAnimationType[] = ['in', 'out', 'attention']
 const slidesStore = useSlidesStore()
-const { handleElement, handleElementId } = storeToRefs(useMainStore())
+const mainStore = useMainStore()
+const {
+  activeElementList,
+  activeGroupElementId,
+  handleElement,
+  handleElementId,
+} = storeToRefs(mainStore)
 const { currentSlide, formatedAnimations, currentSlideAnimations, viewportSize, viewportRatio } = storeToRefs(slidesStore)
 const { addHistorySnapshot } = useHistorySnapshot()
 const { selectElement } = useSelectElement()
@@ -246,11 +259,18 @@ const animationPoolVisible = ref(false)
 const activeAnimationId = ref('')
 const handleAnimationId = ref('')
 
-watch(handleElementId, elementId => {
+const selectedGroupId = computed(() => {
+  if (activeGroupElementId.value || !isSingleGroupSelection(activeElementList.value)) return ''
+  return activeElementList.value[0].groupId || ''
+})
+const animationTargetId = computed(() => selectedGroupId.value || handleElementId.value)
+const animationTargetAvailable = computed(() => !!selectedGroupId.value || !!handleElement.value)
+
+watch(animationTargetId, targetId => {
   animationPoolVisible.value = false
   const active = currentSlideAnimations.value.find(animation => animation.id === activeAnimationId.value)
-  if (active?.elId === elementId) return
-  activeAnimationId.value = currentSlideAnimations.value.find(animation => animation.elId === elementId)?.id || ''
+  if (active?.elId === targetId) return
+  activeAnimationId.value = currentSlideAnimations.value.find(animation => animation.elId === targetId)?.id || ''
 }, { immediate: true })
 
 const timelineTrigger = (trigger: AnimationTrigger): TimelineTrigger => {
@@ -275,7 +295,11 @@ const toTimelineAnimation = (
   return {
     ...existing,
     id: animation.id,
-    target: { ...existing?.target, ...animation.target, elementId: animation.elId },
+    target: {
+      ...existing?.target,
+      ...animation.target,
+      elementId: animation.target?.groupId ? undefined : animation.elId,
+    },
     timing: {
       duration: animation.duration,
       delay: animation.delay || 0,
@@ -305,7 +329,8 @@ const commitAnimations = (animations: PPTAnimation[]) => {
   const activeIds = new Set(animations.map(animation => animation.id))
   const preserved = existingTimeline.filter(animation => {
     return !activeIds.has(animation.id) && (
-      animation.effect.compatibility === 'unsupported' || !animation.target.elementId
+      animation.effect.compatibility === 'unsupported' ||
+      (!animation.target.elementId && !animation.target.groupId)
     )
   })
   slidesStore.updateSlide({
@@ -327,11 +352,12 @@ const animationSequence = computed<SequenceAnimation[]>(() => {
     for (let j = 0; j < step.animations.length; j++) {
       const animation = step.animations[j]
       const element = currentSlide.value.elements.find(item => item.id === animation.elId)
-      if (!element) continue
+      const groupId = animation.target?.groupId
+      if (!element && !groupId) continue
       sequence.push({
         ...animation,
         index: j === 0 ? i + 1 : '',
-        elType: ELEMENT_TYPE_ZH[element.type],
+        elType: groupId ? '组合' : ELEMENT_TYPE_ZH[element!.type],
         animationEffect: getAnimationEffectLabel(animation.effect, animation.type),
         targetLabel: animation.target?.characterRange
           ? `字符 ${animation.target.characterRange.start + 1}–${animation.target.characterRange.end + 1}`
@@ -347,13 +373,23 @@ const animationSequence = computed<SequenceAnimation[]>(() => {
 
 const selectAnimation = (animation: PPTAnimation) => {
   activeAnimationId.value = animation.id
-  selectElement(animation.elId)
+  const groupId = animation.target?.groupId
+  if (!groupId) {
+    selectElement(animation.elId)
+    return
+  }
+  const memberIds = currentSlide.value.elements
+    .filter(element => element.groupId === groupId)
+    .map(element => element.id)
+  mainStore.setActiveGroupElementId('')
+  mainStore.setActiveElementIdList(memberIds)
+  if (memberIds.length) mainStore.setHandleElementId(memberIds[0])
 }
 
 const deleteAnimation = (id: string) => {
   const animations = currentSlideAnimations.value.filter(item => item.id !== id)
   commitAnimations(animations)
-  activeAnimationId.value = animations.find(item => item.elId === handleElementId.value)?.id || ''
+  activeAnimationId.value = animations.find(item => item.elId === animationTargetId.value)?.id || ''
   addHistorySnapshot()
 }
 
@@ -368,11 +404,14 @@ const handleDragEnd = (eventData: { newIndex: number; oldIndex: number }) => {
   addHistorySnapshot()
 }
 
-const animationElement = (elementId: string) => {
-  return document.querySelector<HTMLElement>(`#editable-element-${elementId} [class^=editable-element-]`)
+const animationElement = (animation: PPTAnimation) => {
+  if (animation.target?.groupId) {
+    return document.getElementById(`editable-group-${animation.target.groupId}`)
+  }
+  return document.querySelector<HTMLElement>(`#editable-element-${animation.elId} [class^=editable-element-]`)
 }
 
-const runAnimation = (animation: PPTAnimation, target = animationElement(animation.elId)) => {
+const runAnimation = (animation: PPTAnimation, target = animationElement(animation)) => {
   if (!target) return undefined
   return runElementAnimation(target, animation, {
     viewportWidth: viewportSize.value,
@@ -491,7 +530,8 @@ const addAnimation = (type: EditableAnimationType, effect: string) => {
   }
   const animation: PPTAnimation = {
     id: nanoid(10),
-    elId: handleElementId.value,
+    elId: animationTargetId.value,
+    target: selectedGroupId.value ? { groupId: selectedGroupId.value } : undefined,
     type,
     effect,
     direction: defaultDirectionForEffect(effect, type),

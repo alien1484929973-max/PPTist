@@ -84,10 +84,37 @@ export default () => {
         }
       }
       // 动画id替换
+      const animationIdMap = new Map<string, string>()
       if (slide.animations) {
         for (const animation of slide.animations) {
-          animation.id = nanoid(10)
-          animation.elId = elIdMap[animation.elId]
+          const oldAnimationId = animation.id
+          const newAnimationId = nanoid(10)
+          animationIdMap.set(oldAnimationId, newAnimationId)
+          animation.id = newAnimationId
+          const groupId = animation.target?.groupId
+          if (groupId) {
+            const newGroupId = groupIdMap[groupId]
+            animation.elId = newGroupId
+            animation.target = { ...animation.target, elementId: undefined, groupId: newGroupId }
+          }
+          else {
+            animation.elId = elIdMap[animation.elId]
+            if (animation.target?.elementId) {
+              animation.target = { ...animation.target, elementId: elIdMap[animation.target.elementId] }
+            }
+          }
+        }
+      }
+      if (slide.animationTimeline) {
+        for (const animation of slide.animationTimeline.animations) {
+          animation.id = animationIdMap.get(animation.id) || nanoid(10)
+          if (animation.target.groupId) {
+            animation.target.groupId = groupIdMap[animation.target.groupId]
+            animation.target.elementId = undefined
+          }
+          else if (animation.target.elementId) {
+            animation.target.elementId = elIdMap[animation.target.elementId]
+          }
         }
       }
       return {

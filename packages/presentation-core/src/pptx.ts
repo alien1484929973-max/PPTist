@@ -360,13 +360,16 @@ const legacyEffect = (animation: TimelineAnimation) => {
 export const createLegacyPptAnimations = (
   timeline: AnimationTimeline | undefined,
   resolveElementId: (sourceShapeId: string) => string | undefined,
+  resolveGroupId: (sourceShapeId: string) => string | undefined = () => undefined,
 ): LegacyPptAnimation[] => {
   if (!timeline) return []
 
   return timeline.animations.flatMap(animation => {
     if (animation.effect.compatibility === 'unsupported') return []
     const sourceShapeId = animation.target.sourceShapeId
-    const elId = sourceShapeId ? resolveElementId(sourceShapeId) : undefined
+    const elementId = sourceShapeId ? resolveElementId(sourceShapeId) : undefined
+    const groupId = !elementId && sourceShapeId ? resolveGroupId(sourceShapeId) : undefined
+    const elId = elementId || groupId
     if (!elId) return []
     const canonical = canonicalEffectFromTimeline(animation)
 
@@ -391,7 +394,11 @@ export const createLegacyPptAnimations = (
         ? 'ease-in-out'
         : animation.timing.acceleration ? 'ease-in' : animation.timing.deceleration ? 'ease-out' : undefined,
       motionPath: animation.effect.motionPath,
-      target: { ...animation.target, elementId: elId },
+      target: {
+        ...animation.target,
+        elementId: elementId || undefined,
+        groupId,
+      },
       source: {
         provider: 'pptx',
         presetClass: animation.effect.class,

@@ -76,16 +76,51 @@
           :height="mouseSelection.height" 
           :quadrant="mouseSelectionQuadrant"
         />      
-        <EditableElement 
-          v-for="(element, index) in elementList" 
-          :key="element.id"
-          :elementInfo="element"
-          :elementIndex="index + 1"
-          :isMultiSelect="activeElementIdList.length > 1"
-          :selectElement="selectElement"
-          :openLinkDialog="openLinkDialog"
-          v-show="!hiddenElementIdList.includes(element.id)"
-        />
+        <template v-for="item in renderItems" :key="item.key">
+          <div
+            v-if="item.groupId"
+            class="editable-element-group"
+            :id="`editable-group-${item.groupId}`"
+            :data-group-id="item.groupId"
+            :style="{
+              left: item.range.minX + 'px',
+              top: item.range.minY + 'px',
+              width: Math.max(0.01, item.range.maxX - item.range.minX) + 'px',
+              height: Math.max(0.01, item.range.maxY - item.range.minY) + 'px',
+              zIndex: item.zIndex,
+            }"
+          >
+            <div
+              class="editable-element-group-content"
+              :style="{
+                left: -item.range.minX + 'px',
+                top: -item.range.minY + 'px',
+                width: viewportSize + 'px',
+                height: viewportSize * viewportRatio + 'px',
+              }"
+            >
+              <EditableElement
+                v-for="member in item.elements"
+                :key="member.element.id"
+                :elementInfo="member.element"
+                :elementIndex="member.index + 1"
+                :isMultiSelect="activeElementIdList.length > 1"
+                :selectElement="selectElement"
+                :openLinkDialog="openLinkDialog"
+                v-show="!hiddenElementIdList.includes(member.element.id)"
+              />
+            </div>
+          </div>
+          <EditableElement
+            v-else
+            :elementInfo="item.elements[0].element"
+            :elementIndex="item.elements[0].index + 1"
+            :isMultiSelect="activeElementIdList.length > 1"
+            :selectElement="selectElement"
+            :openLinkDialog="openLinkDialog"
+            v-show="!hiddenElementIdList.includes(item.elements[0].element.id)"
+          />
+        </template>
       </div>
     </div>
 
@@ -103,7 +138,7 @@
 </template>
 
 <script lang="ts" setup>
-import { nextTick, onMounted, onUnmounted, provide, ref, watch, useTemplateRef } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, provide, ref, watch, useTemplateRef } from 'vue'
 import { throttle } from 'lodash'
 import { storeToRefs } from 'pinia'
 import { useMainStore, useSlidesStore, useKeyboardStore } from '@/store'
@@ -113,6 +148,7 @@ import type { AlignmentLineProps, CreateCustomShapeData } from '@/types/edit'
 import { injectKeySlideScale } from '@/types/injectKey'
 import { removeAllRanges } from '@/utils/selection'
 import { cloneEditorElements } from '@/utils/editorElement'
+import { groupElementsForRender } from '@/utils/elementGroup'
 import { KEYS } from '@/configs/hotkey'
 
 import useViewportSize from './hooks/useViewportSize'
@@ -164,7 +200,7 @@ const {
   canvasScale,
   textFormatPainter,
 } = storeToRefs(mainStore)
-const { currentSlide } = storeToRefs(useSlidesStore())
+const { currentSlide, viewportRatio, viewportSize } = storeToRefs(useSlidesStore())
 const { ctrlKeyState, spaceKeyState } = storeToRefs(useKeyboardStore())
 
 const viewportRef = useTemplateRef<HTMLElement>('viewportRef')
@@ -178,6 +214,7 @@ watch(handleElementId, () => {
 })
 
 const elementList = ref<PPTElement[]>([])
+const renderItems = computed(() => groupElementsForRender(elementList.value))
 const setLocalElementList = () => {
   elementList.value = currentSlide.value ? cloneEditorElements(currentSlide.value.elements) : []
 }
@@ -394,5 +431,18 @@ provide(injectKeySlideScale, canvasScale)
   top: 0;
   left: 0;
   transform-origin: 0 0;
+}
+.editable-element-group {
+  position: absolute;
+  transform-origin: center;
+  pointer-events: none;
+
+  .editable-element-group-content {
+    position: absolute;
+  }
+
+  :deep(.editable-element) {
+    pointer-events: auto;
+  }
 }
 </style>

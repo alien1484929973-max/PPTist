@@ -13,6 +13,20 @@ export default () => {
 
   const { addHistorySnapshot } = useHistorySnapshot()
 
+  const withoutGroupAnimations = (groupIds: Set<string>) => {
+    const animations = currentSlide.value.animations?.filter(animation => {
+      return !animation.target?.groupId || !groupIds.has(animation.target.groupId)
+    })
+    const timeline = currentSlide.value.animationTimeline
+    const animationTimeline = timeline ? {
+      ...timeline,
+      animations: timeline.animations.filter(animation => {
+        return !animation.target.groupId || !groupIds.has(animation.target.groupId)
+      }),
+    } : undefined
+    return { animations, animationTimeline }
+  }
+
   /**
    * 判断当前选中的元素是否可以组合
    */
@@ -31,6 +45,8 @@ export default () => {
    */
   const combineElements = () => {
     if (!activeElementList.value.length) return
+
+    const replacedGroupIds = new Set(activeElementList.value.flatMap(element => element.groupId ? [element.groupId] : []))
 
     // 生成一个新元素列表进行后续操作
     let newElementList: PPTElement[] = JSON.parse(JSON.stringify(currentSlide.value.elements))
@@ -57,7 +73,10 @@ export default () => {
     const insertLevel = combineElementMaxLevel - combineElementList.length + 1
     newElementList.splice(insertLevel, 0, ...combineElementList)
 
-    slidesStore.updateSlide({ elements: newElementList })
+    slidesStore.updateSlide({
+      elements: newElementList,
+      ...withoutGroupAnimations(replacedGroupIds),
+    })
     addHistorySnapshot()
   }
 
@@ -70,10 +89,14 @@ export default () => {
     if (!hasElementInGroup) return
     
     const newElementList: PPTElement[] = JSON.parse(JSON.stringify(currentSlide.value.elements))
+    const removedGroupIds = new Set(activeElementList.value.flatMap(element => element.groupId ? [element.groupId] : []))
     for (const element of newElementList) {
       if (activeElementIdList.value.includes(element.id) && element.groupId) delete element.groupId
     }
-    slidesStore.updateSlide({ elements: newElementList })
+    slidesStore.updateSlide({
+      elements: newElementList,
+      ...withoutGroupAnimations(removedGroupIds),
+    })
 
     // 取消组合后，需要重置激活元素状态
     // 默认重置为当前正在操作的元素,如果不存在则重置为空

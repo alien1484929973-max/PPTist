@@ -112,6 +112,16 @@ test('PPTX metadata parser retains Morph, shape identity, and element timing', a
   assert.equal(legacy[1].effect, 'motionPath')
   assert.equal(legacy[1].motionPath, 'M 0 0 L 1 1 E')
   assert.equal(legacy[1].target?.elementId, 'element-4')
+
+  const grouped = createLegacyPptAnimations(
+    slide.animationTimeline,
+    () => undefined,
+    shapeId => shapeId === '4' ? 'group-4' : undefined,
+  )
+  assert.equal(grouped.length, 2)
+  assert.equal(grouped[0].elId, 'group-4')
+  assert.equal(grouped[0].target?.elementId, undefined)
+  assert.equal(grouped[0].target?.groupId, 'group-4')
 })
 
 test('PPTX import preserves paragraph and character animation targets', async () => {

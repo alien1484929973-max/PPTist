@@ -766,6 +766,7 @@ export default () => {
           transition,
           turningMode: transitionTurningMode(transition),
         }
+        const pptxGroupIdMap = new Map<string, string>()
 
         const parseElements = (elements: Element[]) => {
           const sortedElements = elements.sort((a, b) => a.order - b.order)
@@ -1326,6 +1327,9 @@ export default () => {
               })
             }
             else if (el.type === 'group') {
+              const groupFirstElementIndex = slide.elements.length
+              const groupId = nanoid(10)
+              const existingGroupSourceIds = new Set(pptxGroupIdMap.keys())
               let elements: BaseElement[] = el.elements.map(_el => {
                 let left = _el.left + originLeft
                 let top = _el.top + originTop
@@ -1365,14 +1369,38 @@ export default () => {
               if (el.isFlipH) elements = flipGroupElements(elements, 'y')
               if (el.isFlipV) elements = flipGroupElements(elements, 'x')
               parseElements(elements)
+              for (let index = groupFirstElementIndex; index < slide.elements.length; index++) {
+                slide.elements[index].groupId = groupId
+              }
+              const sourceShapeId = (el as SourceAwareElement).pptxSource?.shapeId
+              if (sourceShapeId && slide.elements.length > groupFirstElementIndex) {
+                pptxGroupIdMap.set(sourceShapeId, groupId)
+              }
+              // PPTist currently has one flat groupId level. Nested PPTX groups
+              // therefore resolve to their outer visible group instead of
+              // producing an animation target with no rendered members.
+              for (const nestedSourceId of pptxGroupIdMap.keys()) {
+                if (!existingGroupSourceIds.has(nestedSourceId)) {
+                  pptxGroupIdMap.set(nestedSourceId, groupId)
+                }
+              }
             }
             else if (el.type === 'diagram') {
+              const groupFirstElementIndex = slide.elements.length
+              const groupId = nanoid(10)
               const elements = el.elements.map(_el => ({
                 ..._el,
                 left: _el.left + originLeft,
                 top: _el.top + originTop,
               }))
               parseElements(elements)
+              for (let index = groupFirstElementIndex; index < slide.elements.length; index++) {
+                slide.elements[index].groupId = groupId
+              }
+              const sourceShapeId = (el as SourceAwareElement).pptxSource?.shapeId
+              if (sourceShapeId && slide.elements.length > groupFirstElementIndex) {
+                pptxGroupIdMap.set(sourceShapeId, groupId)
+              }
             }
 
             if (el.type !== 'group' && el.type !== 'diagram') {
@@ -1388,6 +1416,7 @@ export default () => {
           const resolveElementId = (sourceShapeId: string) => {
             return slide.elements.find(element => element.source?.shapeId === sourceShapeId)?.id
           }
+          const resolveGroupId = (sourceShapeId: string) => pptxGroupIdMap.get(sourceShapeId)
           const timeline = importMetadata.animationTimeline
           slide.animationTimeline = {
             ...timeline,
@@ -1398,10 +1427,13 @@ export default () => {
                 elementId: animation.target.sourceShapeId
                   ? resolveElementId(animation.target.sourceShapeId)
                   : undefined,
+                groupId: animation.target.sourceShapeId
+                  ? resolveGroupId(animation.target.sourceShapeId)
+                  : undefined,
               },
             })),
           }
-          slide.animations = createLegacyPptAnimations(timeline, resolveElementId) as PPTAnimation[]
+          slide.animations = createLegacyPptAnimations(timeline, resolveElementId, resolveGroupId) as PPTAnimation[]
         }
         slides.push(slide)
       }

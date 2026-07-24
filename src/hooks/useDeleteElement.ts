@@ -11,6 +11,26 @@ export default () => {
 
   const { addHistorySnapshot } = useHistorySnapshot()
 
+  const animationsForElements = (elements: PPTElement[]) => {
+    const elementIds = new Set(elements.map(element => element.id))
+    const groupIds = new Set(elements.flatMap(element => element.groupId ? [element.groupId] : []))
+    const animations = currentSlide.value.animations?.filter(animation => {
+      return animation.target?.groupId
+        ? groupIds.has(animation.target.groupId)
+        : elementIds.has(animation.elId)
+    })
+    const timeline = currentSlide.value.animationTimeline
+    const animationTimeline = timeline ? {
+      ...timeline,
+      animations: timeline.animations.filter(animation => {
+        if (animation.target.groupId) return groupIds.has(animation.target.groupId)
+        if (animation.target.elementId) return elementIds.has(animation.target.elementId)
+        return true
+      }),
+    } : undefined
+    return { animations, animationTimeline }
+  }
+
   // 删除全部选中元素
   // 组合元素成员中，存在被选中可独立操作的元素时，优先删除该元素。否则默认删除所有被选中的元素
   const deleteElement = () => {
@@ -24,8 +44,19 @@ export default () => {
       newElementList = currentSlide.value.elements.filter(el => !activeElementIdList.value.includes(el.id))
     }
 
+    const groupMemberCount = new Map<string, number>()
+    for (const element of newElementList) {
+      if (element.groupId) groupMemberCount.set(element.groupId, (groupMemberCount.get(element.groupId) || 0) + 1)
+    }
+    newElementList = newElementList.map(element => {
+      if (!element.groupId || (groupMemberCount.get(element.groupId) || 0) >= 2) return element
+      const ungrouped = { ...element }
+      delete ungrouped.groupId
+      return ungrouped
+    })
+
     mainStore.setActiveElementIdList([])
-    slidesStore.updateSlide({ elements: newElementList })
+    slidesStore.updateSlide({ elements: newElementList, ...animationsForElements(newElementList) })
     addHistorySnapshot()
   }
 
@@ -33,7 +64,7 @@ export default () => {
   const deleteAllElements = () => {
     if (!currentSlide.value.elements.length) return
     mainStore.setActiveElementIdList([])
-    slidesStore.updateSlide({ elements: [] })
+    slidesStore.updateSlide({ elements: [], animations: [], animationTimeline: undefined })
     addHistorySnapshot()
   }
 

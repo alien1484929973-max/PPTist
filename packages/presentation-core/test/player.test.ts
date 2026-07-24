@@ -50,6 +50,17 @@ test('timeline compiler keeps simultaneous paragraph targets on the same element
   )
 })
 
+test('timeline compiler treats a group as one stable animation target', () => {
+  const grouped: AnimationTimeline = {
+    version: 1,
+    animations: [
+      { ...animation('group-in', 'click'), target: { groupId: 'group-one' } },
+      { ...animation('group-replace', 'withPrevious'), target: { groupId: 'group-one' } },
+    ],
+  }
+  assert.deepEqual(compileTimeline(grouped)[0].animations.map(item => item.id), ['group-replace'])
+})
+
 test('player controller advances animation steps before changing slides', () => {
   const controller = new PresentationPlayerController()
   controller.load([{ id: 'one', animationTimeline: timeline }, { id: 'two' }])

@@ -76,7 +76,11 @@ export const useSlidesStore = defineStore('slides', {
 
       const els = currentSlide.elements
       const elIds = els.map(el => el.id)
-      return currentSlide.animations.filter(animation => elIds.includes(animation.elId))
+      const groupIds = new Set(els.flatMap(el => el.groupId ? [el.groupId] : []))
+      return currentSlide.animations.filter(animation => {
+        const groupId = animation.target?.groupId
+        return groupId ? groupIds.has(groupId) : elIds.includes(animation.elId)
+      })
     },
 
     // 格式化的当前页动画
@@ -88,7 +92,11 @@ export const useSlidesStore = defineStore('slides', {
 
       const els = currentSlide.elements
       const elIds = els.map(el => el.id)
-      const animations = currentSlide.animations.filter(animation => elIds.includes(animation.elId))
+      const groupIds = new Set(els.flatMap(el => el.groupId ? [el.groupId] : []))
+      const animations = currentSlide.animations.filter(animation => {
+        const groupId = animation.target?.groupId
+        return groupId ? groupIds.has(groupId) : elIds.includes(animation.elId)
+      })
 
       const triggerOf = (animation: PPTAnimation): TimelineTrigger => {
         if (animation.trigger === 'meantime') return 'withPrevious'
@@ -97,7 +105,7 @@ export const useSlidesStore = defineStore('slides', {
       }
       return compileAnimationSteps(animations, triggerOf, animation => timelineTargetKey({
         ...animation.target,
-        elementId: animation.elId,
+        elementId: animation.target?.groupId ? undefined : animation.elId,
       })).map((step): FormatedAnimation => ({
         animations: step.animations,
         autoNext: step.autoAdvance,

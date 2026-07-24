@@ -8,7 +8,7 @@ export interface AnimationStep<T> {
 export type TimelineStep = AnimationStep<TimelineAnimation>
 
 export const timelineTargetKey = (target: TimelineTarget) => {
-  const element = target.elementId || target.sourceShapeId
+  const element = target.groupId || target.elementId || target.sourceShapeId
   if (!element) return undefined
   const paragraph = target.paragraphRange
     ? `${target.paragraphRange.start}:${target.paragraphRange.end}`
