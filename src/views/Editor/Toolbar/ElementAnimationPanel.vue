@@ -58,8 +58,15 @@
       @end="handleDragEnd"
     >
       <template #item="{ element }">
-        <div class="sequence-item" :class="[element.type, { 'active': activeAnimationId === element.id }]" @click="selectAnimation(element)">
-          <div class="sequence-content">
+        <div class="sequence-item" :class="[element.type, { 'active': activeAnimationId === element.id }]">
+          <div
+            class="sequence-content"
+            role="button"
+            tabindex="0"
+            :aria-expanded="activeAnimationId === element.id"
+            @click="selectAnimation(element)"
+            @keydown.enter.space.prevent="selectAnimation(element)"
+          >
             <div class="index">{{element.index}}</div>
             <div class="text">
               「{{element.elType}}」{{element.animationEffect}}
@@ -69,107 +76,111 @@
             <div class="handler">
               <i-icon-park-outline:play-one class="handler-btn" v-tooltip="'预览'" @click.stop="previewAnimation(element)" />
               <i-icon-park-outline:close-small class="handler-btn" v-tooltip="'删除'" @click.stop="deleteAnimation(element.id)" />
+              <i-icon-park-outline:down class="expand-icon" v-if="activeAnimationId === element.id" />
+              <i-icon-park-outline:right class="expand-icon" v-else />
             </div>
           </div>
 
-          <div class="configs" v-if="activeAnimationId === element.id">
-            <Divider :margin="16" />
+          <div class="configs-collapse" :class="{ 'expanded': activeAnimationId === element.id }">
+            <div class="configs">
+              <Divider :margin="10" />
 
-            <div class="config-item" v-if="getAnimationDirectionOptions(element).length">
-              <div style="width: 35%;">效果选项：</div>
-              <Select
-                :value="getAnimationDirection(element) || ''"
-                @update:value="value => updateElementAnimationDirection(element.id, value as AnimationDirection)"
-                style="width: 65%;"
-                :options="getAnimationDirectionOptions(element)"
-              />
-            </div>
-            <div class="config-item">
-              <div style="width: 35%;">开始：</div>
-              <Select
-                :value="element.trigger"
-                @update:value="value => updateElementAnimationTrigger(element.id, value as AnimationTrigger)"
-                style="width: 65%;"
-                :options="[
-                  { label: '单击时', value: 'click' },
-                  { label: '与上一动画同时', value: 'meantime' },
-                  { label: '上一动画之后', value: 'auto' },
-                ]"
-              />
-            </div>
-            <div class="config-item">
-              <Button style="width: 100%;" @click="openAnimationPool(element.id)"><i-icon-park-outline:switch /> 更换动画</Button>
-            </div>
-            <div class="advanced-settings-toggle" @click.stop="toggleAdvancedSettings(element.id)">
-              <span>高级设置</span>
-              <i-icon-park-outline:down v-if="advancedAnimationId === element.id" />
-              <i-icon-park-outline:right v-else />
-            </div>
-            <div class="advanced-settings" v-if="advancedAnimationId === element.id">
-              <div class="config-item">
-                <div style="width: 35%;">持续时长：</div>
-                <NumberInput
-                  :min="100"
-                  :max="10000"
-                  :step="100"
-                  :value="element.duration"
-                  @update:value="value => updateElementAnimationDuration(element.id, value)"
-                  style="width: 65%;"
-                />
+              <div class="primary-config-row">
+                <div class="compact-config-item" v-if="getAnimationDirectionOptions(element).length">
+                  <div class="compact-config-label">效果选项</div>
+                  <Select
+                    :value="getAnimationDirection(element) || ''"
+                    @update:value="value => updateElementAnimationDirection(element.id, value as AnimationDirection)"
+                    :options="getAnimationDirectionOptions(element)"
+                  />
+                </div>
+                <div class="compact-config-item" :class="{ 'single': !getAnimationDirectionOptions(element).length }">
+                  <div class="compact-config-label">开始</div>
+                  <Select
+                    :value="element.trigger"
+                    @update:value="value => updateElementAnimationTrigger(element.id, value as AnimationTrigger)"
+                    :options="[
+                      { label: '单击时', value: 'click' },
+                      { label: '与上一动画同时', value: 'meantime' },
+                      { label: '上一动画之后', value: 'auto' },
+                    ]"
+                  />
+                </div>
               </div>
-              <div class="config-item">
-                <div style="width: 35%;">延迟：</div>
-                <NumberInput
-                  :min="0"
-                  :max="10000"
-                  :step="100"
-                  :value="element.delay || 0"
-                  @update:value="value => updateElementAnimationDelay(element.id, value)"
-                  style="width: 65%;"
-                />
+              <div class="config-item change-animation">
+                <Button size="small" style="width: 100%;" @click="openAnimationPool(element.id)"><i-icon-park-outline:switch /> 更换动画</Button>
               </div>
-              <div class="config-item">
-                <div style="width: 35%;">重复：</div>
-                <Select
-                  :value="element.repeatCount || 1"
-                  @update:value="value => updateElementAnimationRepeat(element.id, Number(value))"
-                  style="width: 65%;"
-                  :options="[
-                    { label: '无', value: 1 },
-                    { label: '2 次', value: 2 },
-                    { label: '3 次', value: 3 },
-                    { label: '5 次', value: 5 },
-                    { label: '10 次', value: 10 },
-                  ]"
-                />
+              <div class="advanced-settings-toggle" @click.stop="toggleAdvancedSettings(element.id)">
+                <span>高级设置</span>
+                <i-icon-park-outline:down v-if="advancedAnimationId === element.id" />
+                <i-icon-park-outline:right v-else />
               </div>
-              <div class="config-item">
-                <div
-                  style="width: 35%;"
-                  v-tooltip="'控制动画在开始、途中和结束时如何加速或减速'"
-                >速度曲线：</div>
-                <Select
-                  :value="element.easing || 'ease'"
-                  @update:value="value => updateElementAnimationEasing(element.id, String(value))"
-                  style="width: 65%;"
-                  :options="[
-                    { label: '平滑', value: 'ease' },
-                    { label: '匀速', value: 'linear' },
-                    { label: '平滑开始', value: 'ease-in' },
-                    { label: '平滑结束', value: 'ease-out' },
-                    { label: '平滑开始和结束', value: 'ease-in-out' },
-                  ]"
-                />
-              </div>
-              <div class="config-item">
-                <div
-                  style="width: 35%;"
-                  v-tooltip="'到达终点后沿相反方向播放一次，回到起始状态'"
-                >自动翻转：</div>
-                <Switch
-                  :value="!!element.autoReverse"
-                  @update:value="value => updateElementAnimationAutoReverse(element.id, value)"
-                />
+              <div class="advanced-settings" v-if="advancedAnimationId === element.id">
+                <div class="config-item">
+                  <div style="width: 35%;">持续时长：</div>
+                  <NumberInput
+                    :min="100"
+                    :max="10000"
+                    :step="100"
+                    :value="element.duration"
+                    @update:value="value => updateElementAnimationDuration(element.id, value)"
+                    style="width: 65%;"
+                  />
+                </div>
+                <div class="config-item">
+                  <div style="width: 35%;">延迟：</div>
+                  <NumberInput
+                    :min="0"
+                    :max="10000"
+                    :step="100"
+                    :value="element.delay || 0"
+                    @update:value="value => updateElementAnimationDelay(element.id, value)"
+                    style="width: 65%;"
+                  />
+                </div>
+                <div class="config-item">
+                  <div style="width: 35%;">重复：</div>
+                  <Select
+                    :value="element.repeatCount || 1"
+                    @update:value="value => updateElementAnimationRepeat(element.id, Number(value))"
+                    style="width: 65%;"
+                    :options="[
+                      { label: '无', value: 1 },
+                      { label: '2 次', value: 2 },
+                      { label: '3 次', value: 3 },
+                      { label: '5 次', value: 5 },
+                      { label: '10 次', value: 10 },
+                    ]"
+                  />
+                </div>
+                <div class="config-item">
+                  <div
+                    style="width: 35%;"
+                    v-tooltip="'控制动画在开始、途中和结束时如何加速或减速'"
+                  >速度曲线：</div>
+                  <Select
+                    :value="element.easing || 'ease'"
+                    @update:value="value => updateElementAnimationEasing(element.id, String(value))"
+                    style="width: 65%;"
+                    :options="[
+                      { label: '平滑', value: 'ease' },
+                      { label: '匀速', value: 'linear' },
+                      { label: '平滑开始', value: 'ease-in' },
+                      { label: '平滑结束', value: 'ease-out' },
+                      { label: '平滑开始和结束', value: 'ease-in-out' },
+                    ]"
+                  />
+                </div>
+                <div class="config-item">
+                  <div
+                    style="width: 35%;"
+                    v-tooltip="'到达终点后沿相反方向播放一次，回到起始状态'"
+                  >自动翻转：</div>
+                  <Switch
+                    :value="!!element.autoReverse"
+                    @update:value="value => updateElementAnimationAutoReverse(element.id, value)"
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -398,6 +409,11 @@ const animationSequence = computed<SequenceAnimation[]>(() => {
 })
 
 const selectAnimation = (animation: PPTAnimation) => {
+  if (activeAnimationId.value === animation.id) {
+    activeAnimationId.value = ''
+    advancedAnimationId.value = ''
+    return
+  }
   if (activeAnimationId.value !== animation.id) advancedAnimationId.value = ''
   activeAnimationId.value = animation.id
   const groupId = animation.target?.groupId
@@ -639,9 +655,42 @@ $motionColor: #6f7fc6;
     margin-top: 5px;
   }
 }
+.configs-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows .22s ease;
+
+  &.expanded {
+    grid-template-rows: 1fr;
+  }
+}
+.configs {
+  min-height: 0;
+  overflow: hidden;
+}
+.primary-config-row {
+  display: flex;
+  gap: 6px;
+}
+.compact-config-item {
+  width: calc(50% - 3px);
+  min-width: 0;
+
+  &.single {
+    width: 100%;
+  }
+}
+.compact-config-label {
+  margin: 0 0 3px 2px;
+  color: #666;
+  font-size: 12px;
+}
+.change-animation {
+  margin-top: 6px;
+}
 .advanced-settings-toggle {
-  margin-top: 8px;
-  padding: 7px 2px 2px;
+  margin-top: 6px;
+  padding: 6px 2px 1px;
   border-top: 1px solid $borderColor;
   display: flex;
   justify-content: space-between;
@@ -651,8 +700,8 @@ $motionColor: #6f7fc6;
   user-select: none;
 }
 .advanced-settings {
-  margin-top: 6px;
-  padding: 8px;
+  margin-top: 5px;
+  padding: 6px;
   border-radius: $borderRadius;
   background-color: #f7f7f7;
 }
@@ -720,17 +769,17 @@ $motionColor: #6f7fc6;
 
 .animation-sequence {
   flex: 1;
-  padding-right: 12px;
-  margin-right: -12px;
+  padding-right: 8px;
+  margin-right: -8px;
 
   @include overflow-overlay();
 }
 .sequence-item {
   border: 1px solid $borderColor;
-  padding: 8px;
+  padding: 6px 7px;
   border-radius: $borderRadius;
-  margin-bottom: 8px;
-  transition: all .5s;
+  margin-bottom: 6px;
+  transition: border-color .2s;
 
   &.in.active {
     border-color: $inColor;
@@ -752,29 +801,43 @@ $motionColor: #6f7fc6;
     display: flex;
     align-items: center;
     cursor: grab;
+    outline: none;
 
     &:active {
       cursor: grabbing;
     }
+    &:focus-visible {
+      outline: 2px solid rgba($color: $themeColor, $alpha: .2);
+      outline-offset: 2px;
+    }
 
     .index {
-      flex: 1;
+      flex: none;
+      width: 18px;
     }
     .text {
-      flex: 6;
+      flex: 1;
+      min-width: 0;
+      @include ellipsis-oneline();
 
       .direction {
         color: #888;
       }
     }
     .handler {
-      flex: 2;
+      flex: none;
+      min-width: 64px;
       font-size: 15px;
       text-align: right;
     }
     .handler-btn {
-      margin-left: 8px;
+      margin-left: 6px;
       cursor: pointer;
+    }
+    .expand-icon {
+      margin-left: 5px;
+      color: #999;
+      font-size: 12px;
     }
   }
 }
