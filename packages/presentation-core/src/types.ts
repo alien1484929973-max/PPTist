@@ -45,17 +45,28 @@ export interface TimelineTiming {
   easing?: string
 }
 
-export type AnimationDirection = 'left' | 'right' | 'up' | 'down'
+export type CardinalDirection = 'left' | 'right' | 'up' | 'down'
+export type AnimationDirection = CardinalDirection
+  | 'topLeft'
+  | 'topRight'
+  | 'bottomLeft'
+  | 'bottomRight'
 export type AnimationPhase = 'entrance' | 'exit' | 'emphasis'
 
 export type CanonicalAnimationEffect =
   | { kind: 'appear'; phase: 'entrance' | 'exit' }
   | { kind: 'fade'; phase: 'entrance' | 'exit' }
   | { kind: 'zoom'; phase: 'entrance' | 'exit' }
-  | { kind: 'wipe'; phase: 'entrance' | 'exit'; direction: AnimationDirection }
+  | { kind: 'wipe'; phase: 'entrance' | 'exit'; direction: CardinalDirection }
   | { kind: 'fly'; phase: 'entrance' | 'exit'; direction: AnimationDirection }
+  | { kind: 'float'; phase: 'entrance' | 'exit'; direction: 'up' | 'down' }
+  | { kind: 'bounce'; phase: 'entrance' | 'exit'; direction?: AnimationDirection }
   | { kind: 'spin'; phase: 'emphasis'; degrees?: number }
   | { kind: 'scale'; phase: 'emphasis'; x: number; y: number }
+  | { kind: 'pulse'; phase: 'emphasis'; scale?: number }
+  | { kind: 'transparency'; phase: 'emphasis'; opacity?: number }
+  | { kind: 'blink'; phase: 'emphasis' }
+  | { kind: 'teeter'; phase: 'emphasis'; degrees?: number }
 
 export interface TimelineEffect {
   class: TimelineAnimationClass

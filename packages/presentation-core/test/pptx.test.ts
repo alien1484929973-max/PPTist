@@ -93,6 +93,7 @@ test('PPTX metadata parser retains Morph, shape identity, and element timing', a
   assert.equal(animation?.effect.class, 'entrance')
   assert.equal(animation?.effect.presetId, 10)
   assert.equal(animation?.effect.compatibility, 'mapped')
+  assert.deepEqual(animation?.effect.canonical, { kind: 'fade', phase: 'entrance' })
 
   const unsupported = slide.animationTimeline?.animations[1]
   assert.equal(unsupported?.effect.class, 'motionPath')
@@ -143,9 +144,27 @@ for (const direction of ['left', 'right', 'up', 'down'] as const) {
       assert.equal(animation?.timing.easing, 'ease-in-out')
 
       const legacy = createLegacyPptAnimations(result.slides[0].animationTimeline, () => 'element-4')
-      const suffix = direction[0].toUpperCase() + direction.slice(1)
-      assert.equal(legacy[0].effect, `wipe${phase === 'exit' ? 'Out' : 'In'}${suffix}`)
+      assert.equal(legacy[0].effect, `wipe${phase === 'exit' ? 'Out' : 'In'}`)
+      assert.equal(legacy[0].direction, direction)
       assert.match(legacy[0].source.rawXml || '', /animEffect/)
     })
   }
 }
+
+test('PPTX fly import retains diagonal direction as an independent effect option', async () => {
+  const xml = wipeSlideXml('left', 'entr')
+    .replace('presetID="22"', 'presetID="2"')
+    .replace('filter="wipe(left)"', 'filter="fly(topLeft)"')
+  const zip = new JSZip()
+  zip.file('ppt/slides/slide1.xml', xml)
+  const buffer = await zip.generateAsync({ type: 'arraybuffer' })
+  const result = await parsePptxImportMetadata(buffer, xmlRuntime)
+  const animation = result.slides[0].animationTimeline?.animations[0]
+
+  assert.deepEqual(animation?.effect.canonical, {
+    kind: 'fly', phase: 'entrance', direction: 'topLeft',
+  })
+  const legacy = createLegacyPptAnimations(result.slides[0].animationTimeline, () => 'element-4')
+  assert.equal(legacy[0].effect, 'flyIn')
+  assert.equal(legacy[0].direction, 'topLeft')
+})

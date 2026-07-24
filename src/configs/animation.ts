@@ -1,280 +1,196 @@
-import type { TurningMode } from '@/types/slides'
+import {
+  defaultDirectionForEffect,
+  normalizeAnimationEffectId,
+  resolveAnimationDirection,
+  supportedDirectionsForEffect,
+  type AnimationDirection,
+} from '@pptist/presentation-core'
+import type { AnimationType, PPTAnimation, TurningMode } from '@/types/slides'
 
 export const ANIMATION_DEFAULT_DURATION = 1000
 export const ANIMATION_DEFAULT_TRIGGER = 'click'
 export const ANIMATION_CLASS_PREFIX = 'animate__'
 
-export const ENTER_ANIMATIONS = [
+interface ElementAnimationOption {
+  name: string
+  value: string
+}
+
+interface ElementAnimationGroup {
+  type: string
+  name: string
+  children: ElementAnimationOption[]
+}
+
+// Effects are intentionally listed once. Direction belongs to Effect Options
+// in the animation pane, matching PowerPoint instead of multiplying entries.
+export const ENTER_ANIMATIONS: ElementAnimationGroup[] = [
   {
     type: 'basic',
-    name: '基础',
+    name: '基本型',
     children: [
       { name: '出现', value: 'appear' },
+      { name: '淡入', value: 'fadeIn' },
     ],
   },
   {
-    type: 'wipe',
-    name: '实心擦除',
+    type: 'motion',
+    name: '动作型',
     children: [
-      { name: '从左擦除进入', value: 'wipeInLeft' },
-      { name: '从右擦除进入', value: 'wipeInRight' },
-      { name: '从上擦除进入', value: 'wipeInUp' },
-      { name: '从下擦除进入', value: 'wipeInDown' },
+      { name: '飞入', value: 'flyIn' },
+      { name: '浮入', value: 'floatIn' },
+      { name: '实心擦除', value: 'wipeIn' },
     ],
   },
   {
-    type: 'flyNative',
-    name: '飞入（原生）',
+    type: 'accent',
+    name: '强调型',
     children: [
-      { name: '从左飞入', value: 'flyInLeft' },
-      { name: '从右飞入', value: 'flyInRight' },
-      { name: '从上飞入', value: 'flyInUp' },
-      { name: '从下飞入', value: 'flyInDown' },
-    ],
-  },
-  {
-    type: 'bounce',
-    name: '弹跳',
-    children: [
-      { name: '弹入', value: 'bounceIn' },
-      { name: '向右弹入', value: 'bounceInLeft' },
-      { name: '向左弹入', value: 'bounceInRight' },
-      { name: '向上弹入', value: 'bounceInUp' },
-      { name: '向下弹入', value: 'bounceInDown' },
-    ],
-  },
-  {
-    type: 'fade',
-    name: '浮现',
-    children: [
-      { name: '浮入', value: 'fadeIn' },
-      { name: '向下浮入', value: 'fadeInDown' },
-      { name: '向下长距浮入', value: 'fadeInDownBig' },
-      { name: '向右浮入', value: 'fadeInLeft' },
-      { name: '向右长距浮入', value: 'fadeInLeftBig' },
-      { name: '向左浮入', value: 'fadeInRight' },
-      { name: '向左长距浮入', value: 'fadeInRightBig' },
-      { name: '向上浮入', value: 'fadeInUp' },
-      { name: '向上长距浮入', value: 'fadeInUpBig' },
-      { name: '从左上浮入', value: 'fadeInTopLeft' },
-      { name: '从右上浮入', value: 'fadeInTopRight' },
-      { name: '从左下浮入', value: 'fadeInBottomLeft' },
-      { name: '从右下浮入', value: 'fadeInBottomRight' },
-    ],
-  },
-  {
-    type: 'rotate',
-    name: '旋转',
-    children: [
-      { name: '旋转进入', value: 'rotateIn' },
-      { name: '绕左下进入', value: 'rotateInDownLeft' },
-      { name: '绕右下进入', value: 'rotateInDownRight' },
-      { name: '绕左上进入', value: 'rotateInUpLeft' },
-      { name: '绕右上进入', value: 'rotateInUpRight' },
-    ],
-  },
-  {
-    type: 'zoom',
-    name: '缩放',
-    children: [
-      { name: '放大进入', value: 'zoomIn' },
-      { name: '向下放大进入', value: 'zoomInDown' },
-      { name: '从左放大进入', value: 'zoomInLeft' },
-      { name: '从右放大进入', value: 'zoomInRight' },
-      { name: '向上放大进入', value: 'zoomInUp' },
-    ],
-  },
-  {
-    type: 'slide',
-    name: '滑入',
-    children: [
-      { name: '向下滑入', value: 'slideInDown' },
-      { name: '从右滑入', value: 'slideInLeft' },
-      { name: '从左滑入', value: 'slideInRight' },
-      { name: '向上滑入', value: 'slideInUp' },
-    ],
-  },
-  {
-    type: 'flip',
-    name: '翻转',
-    children: [
-      { name: 'X轴翻转进入', value: 'flipInX' },
-      { name: 'Y轴翻转进入', value: 'flipInY' },
-    ],
-  },
-  {
-    type: 'back',
-    name: '放大滑入',
-    children: [
-      { name: '向下放大滑入', value: 'backInDown' },
-      { name: '从左放大滑入', value: 'backInLeft' },
-      { name: '从右放大滑入', value: 'backInRight' },
-      { name: '向上放大滑入', value: 'backInUp' },
-    ],
-  },
-  {
-    type: 'lightSpeed',
-    name: '飞入',
-    children: [
-      { name: '从右飞入', value: 'lightSpeedInRight' },
-      { name: '从左飞入', value: 'lightSpeedInLeft' },
+      { name: '缩放', value: 'zoomIn' },
+      { name: '弹跳', value: 'bounceIn' },
     ],
   },
 ]
 
-export const EXIT_ANIMATIONS = [
+export const EXIT_ANIMATIONS: ElementAnimationGroup[] = [
   {
     type: 'basic',
-    name: '基础',
+    name: '基本型',
     children: [
       { name: '消失', value: 'disappear' },
+      { name: '淡出', value: 'fadeOut' },
     ],
   },
   {
-    type: 'wipe',
-    name: '实心擦除',
+    type: 'motion',
+    name: '动作型',
     children: [
-      { name: '向左擦除退出', value: 'wipeOutLeft' },
-      { name: '向右擦除退出', value: 'wipeOutRight' },
-      { name: '向上擦除退出', value: 'wipeOutUp' },
-      { name: '向下擦除退出', value: 'wipeOutDown' },
+      { name: '飞出', value: 'flyOut' },
+      { name: '浮出', value: 'floatOut' },
+      { name: '实心擦除', value: 'wipeOut' },
     ],
   },
   {
-    type: 'flyNative',
-    name: '飞出（原生）',
+    type: 'accent',
+    name: '强调型',
     children: [
-      { name: '向左飞出', value: 'flyOutLeft' },
-      { name: '向右飞出', value: 'flyOutRight' },
-      { name: '向上飞出', value: 'flyOutUp' },
-      { name: '向下飞出', value: 'flyOutDown' },
-    ],
-  },
-  {
-    type: 'bounce',
-    name: '弹跳',
-    children: [
-      { name: '弹出', value: 'bounceOut' },
-      { name: '向左弹出', value: 'bounceOutLeft' },
-      { name: '向右弹出', value: 'bounceOutRight' },
-      { name: '向上弹出', value: 'bounceOutUp' },
-      { name: '向下弹出', value: 'bounceOutDown' },
-    ],
-  },
-  {
-    type: 'fade',
-    name: '浮现',
-    children: [
-      { name: '浮出', value: 'fadeOut' },
-      { name: '向下浮出', value: 'fadeOutDown' },
-      { name: '向下长距浮出', value: 'fadeOutDownBig' },
-      { name: '向左浮出', value: 'fadeOutLeft' },
-      { name: '向左长距浮出', value: 'fadeOutLeftBig' },
-      { name: '向右浮出', value: 'fadeOutRight' },
-      { name: '向右长距浮出', value: 'fadeOutRightBig' },
-      { name: '向上浮出', value: 'fadeOutUp' },
-      { name: '向上长距浮出', value: 'fadeOutUpBig' },
-      { name: '从左上浮出', value: 'fadeOutTopLeft' },
-      { name: '从右上浮出', value: 'fadeOutTopRight' },
-      { name: '从左下浮出', value: 'fadeOutBottomLeft' },
-      { name: '从右下浮出', value: 'fadeOutBottomRight' },
-    ],
-  },
-  {
-    type: 'rotate',
-    name: '旋转',
-    children: [
-      { name: '旋转退出', value: 'rotateOut' },
-      { name: '绕左下退出', value: 'rotateOutDownLeft' },
-      { name: '绕右下退出', value: 'rotateOutDownRight' },
-      { name: '绕左上退出', value: 'rotateOutUpLeft' },
-      { name: '绕右上退出', value: 'rotateOutUpRight' },
-    ],
-  },
-  {
-    type: 'zoom',
-    name: '缩放',
-    children: [
-      { name: '缩小退出', value: 'zoomOut' },
-      { name: '向下缩小退出', value: 'zoomOutDown' },
-      { name: '从左缩小退出', value: 'zoomOutLeft' },
-      { name: '从右缩小退出', value: 'zoomOutRight' },
-      { name: '向上缩小退出', value: 'zoomOutUp' },
-    ],
-  },
-  {
-    type: 'slide',
-    name: '滑出',
-    children: [
-      { name: '向下滑出', value: 'slideOutDown' },
-      { name: '从左滑出', value: 'slideOutLeft' },
-      { name: '从右滑出', value: 'slideOutRight' },
-      { name: '向上滑出', value: 'slideOutUp' },
-    ],
-  },
-  {
-    type: 'flip',
-    name: '翻转',
-    children: [
-      { name: 'X轴翻转退出', value: 'flipOutX' },
-      { name: 'Y轴翻转退出', value: 'flipOutY' },
-    ],
-  },
-  {
-    type: 'back',
-    name: '缩小滑出',
-    children: [
-      { name: '向下缩小滑出', value: 'backOutDown' },
-      { name: '从左缩小滑出', value: 'backOutLeft' },
-      { name: '从右缩小滑出', value: 'backOutRight' },
-      { name: '向上缩小滑出', value: 'backOutUp' },
-    ],
-  },
-  {
-    type: 'lightSpeed',
-    name: '飞出',
-    children: [
-      { name: '从右飞出', value: 'lightSpeedOutRight' },
-      { name: '从左飞出', value: 'lightSpeedOutLeft' },
+      { name: '缩放', value: 'zoomOut' },
+      { name: '弹跳', value: 'bounceOut' },
     ],
   },
 ]
 
-export const ATTENTION_ANIMATIONS = [
+export const ATTENTION_ANIMATIONS: ElementAnimationGroup[] = [
   {
-    type: 'native',
-    name: '基础强调',
+    type: 'emphasis',
+    name: '强调效果',
     children: [
+      { name: '脉冲', value: 'pulse' },
       { name: '旋转', value: 'spin' },
       { name: '放大', value: 'grow' },
       { name: '缩小', value: 'shrink' },
-    ],
-  },
-  {
-    type: 'shake',
-    name: '晃动',
-    children: [
-      { name: '左右摇晃', value: 'shakeX' },
-      { name: '上下摇晃', value: 'shakeY' },
-      { name: '摇头', value: 'headShake' },
-      { name: '摆动', value: 'swing' },
-      { name: '晃动', value: 'wobble' },
-      { name: '惊恐', value: 'tada' },
-      { name: '果冻', value: 'jello' },
-    ],
-  },
-  {
-    type: 'other',
-    name: '其他',
-    children: [
-      { name: '弹跳', value: 'bounce' },
-      { name: '闪烁', value: 'flash' },
-      { name: '脉搏', value: 'pulse' },
-      { name: '橡皮筋', value: 'rubberBand' },
-      { name: '心跳（快）', value: 'heartBeat' },
+      { name: '透明', value: 'transparency' },
+      { name: '闪烁', value: 'blink' },
+      { name: '跷跷板', value: 'teeter' },
     ],
   },
 ]
+
+const EFFECT_LABELS: Record<string, string> = {
+  appear: '出现',
+  disappear: '消失',
+  fadeIn: '淡入',
+  fadeOut: '淡出',
+  flyIn: '飞入',
+  flyOut: '飞出',
+  floatIn: '浮入',
+  floatOut: '浮出',
+  wipeIn: '实心擦除',
+  wipeOut: '实心擦除',
+  zoomIn: '缩放',
+  zoomOut: '缩放',
+  bounceIn: '弹跳',
+  bounceOut: '弹跳',
+  bounce: '弹跳',
+  pulse: '脉冲',
+  spin: '旋转',
+  grow: '放大',
+  shrink: '缩小',
+  transparency: '透明',
+  blink: '闪烁',
+  teeter: '跷跷板',
+  flash: '闪烁',
+  shakeX: '左右摇摆',
+  shakeY: '上下摇摆',
+  headShake: '摇头',
+  swing: '摆动',
+  wobble: '晃动',
+  tada: '强调',
+  jello: '果冻',
+  rubberBand: '弹性',
+  heartBeat: '心跳',
+}
+
+const LEGACY_EFFECT_LABELS: Array<[RegExp, string]> = [
+  [/^rotate(In|Out)/, '旋转'],
+  [/^slide(In|Out)/, '滑动'],
+  [/^flip(In|Out)/, '翻转'],
+  [/^back(In|Out)/, '缩放滑动'],
+  [/^lightSpeed(In|Out)/, '快速飞行'],
+  [/^(shake|headShake|swing|wobble|tada|jello)/, '摇摆'],
+  [/^(flash|heartBeat|rubberBand)$/, '强调'],
+]
+
+export const getAnimationEffectLabel = (effect: string, type: AnimationType) => {
+  const normalized = normalizeAnimationEffectId(effect, type)
+  if (EFFECT_LABELS[normalized]) return EFFECT_LABELS[normalized]
+  return LEGACY_EFFECT_LABELS.find(([pattern]) => pattern.test(effect))?.[1] || effect
+}
+
+const FROM_DIRECTION_LABELS: Record<AnimationDirection, string> = {
+  left: '自左侧',
+  right: '自右侧',
+  up: '自顶部',
+  down: '自底部',
+  topLeft: '自左上方',
+  topRight: '自右上方',
+  bottomLeft: '自左下方',
+  bottomRight: '自右下方',
+}
+
+const TO_DIRECTION_LABELS: Record<AnimationDirection, string> = {
+  left: '向左侧',
+  right: '向右侧',
+  up: '向顶部',
+  down: '向底部',
+  topLeft: '向左上方',
+  topRight: '向右上方',
+  bottomLeft: '向左下方',
+  bottomRight: '向右下方',
+}
+
+export const getAnimationDirection = (animation: Pick<PPTAnimation, 'effect' | 'type' | 'direction'>) => {
+  const supported = supportedDirectionsForEffect(animation.effect, animation.type)
+  const resolved = resolveAnimationDirection(animation.effect, animation.type, animation.direction)
+  if (resolved && supported.includes(resolved)) return resolved
+  const defaultDirection = defaultDirectionForEffect(animation.effect, animation.type)
+  return defaultDirection && supported.includes(defaultDirection) ? defaultDirection : supported[0]
+}
+
+export const getAnimationDirectionOptions = (animation: Pick<PPTAnimation, 'effect' | 'type' | 'direction'>) => {
+  const labels = animation.type === 'out' ? TO_DIRECTION_LABELS : FROM_DIRECTION_LABELS
+  const supported = supportedDirectionsForEffect(animation.effect, animation.type)
+  return supported.map(direction => ({
+    label: labels[direction],
+    value: direction,
+  }))
+}
+
+export const getAnimationDirectionLabel = (animation: Pick<PPTAnimation, 'effect' | 'type' | 'direction'>) => {
+  const direction = getAnimationDirection(animation)
+  if (!direction || !supportedDirectionsForEffect(animation.effect, animation.type).length) return ''
+  return (animation.type === 'out' ? TO_DIRECTION_LABELS : FROM_DIRECTION_LABELS)[direction]
+}
 
 interface SlideAnimation {
   label: string

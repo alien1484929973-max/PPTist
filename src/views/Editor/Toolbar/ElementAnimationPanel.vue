@@ -23,18 +23,11 @@
                   <div 
                     class="pool-item" 
                     v-for="item in effect.children" :key="item.name"
-                    @mouseenter="hoverPreviewAnimation = item.value"
-                    @mouseleave="hoverPreviewAnimation = ''"
+                    @mouseenter="previewPoolAnimation($event, key, item.value)"
+                    @mouseleave="stopPoolPreview()"
                     @click="addAnimation(key, item.value)"
                   >
-                    <div 
-                      class="animation-box"
-                      :class="[
-                        `${ANIMATION_CLASS_PREFIX}animated`,
-                        `${ANIMATION_CLASS_PREFIX}fast`,
-                        hoverPreviewAnimation === item.value && `${ANIMATION_CLASS_PREFIX}${item.value}`,
-                      ]"
-                    >{{item.name}}</div>
+                    <div class="animation-box">{{item.name}}</div>
                   </div>
                 </div>
               </div>
@@ -52,6 +45,8 @@
     
     <Divider />
 
+    <div class="pane-title">动画窗格</div>
+
     <Draggable 
       class="animation-sequence"
       :modelValue="animationSequence"
@@ -63,41 +58,101 @@
       @end="handleDragEnd"
     >
       <template #item="{ element }">
-        <div class="sequence-item" :class="[element.type, { 'active': handleElement?.id === element.elId }]" @click="selectElement(element.elId)">
+        <div class="sequence-item" :class="[element.type, { 'active': activeAnimationId === element.id }]" @click="selectAnimation(element)">
           <div class="sequence-content">
             <div class="index">{{element.index}}</div>
-            <div class="text">「{{element.elType}}」{{element.animationEffect}}</div>
+            <div class="text">
+              「{{element.elType}}」{{element.animationEffect}}
+              <span class="direction" v-if="element.directionLabel"> · {{element.directionLabel}}</span>
+            </div>
             <div class="handler">
-              <i-icon-park-outline:play-one class="handler-btn" v-tooltip="'预览'" @click.stop="runAnimation(element.elId, element.effect, element.duration, element.type)" />
+              <i-icon-park-outline:play-one class="handler-btn" v-tooltip="'预览'" @click.stop="previewAnimation(element)" />
               <i-icon-park-outline:close-small class="handler-btn" v-tooltip="'删除'" @click.stop="deleteAnimation(element.id)" />
             </div>
           </div>
 
-          <div class="configs" v-if="handleElementAnimation[0]?.elId === element.elId">
+          <div class="configs" v-if="activeAnimationId === element.id">
             <Divider :margin="16" />
 
+            <div class="config-item" v-if="getAnimationDirectionOptions(element).length">
+              <div style="width: 35%;">效果选项：</div>
+              <Select
+                :value="getAnimationDirection(element) || ''"
+                @update:value="value => updateElementAnimationDirection(element.id, value as AnimationDirection)"
+                style="width: 65%;"
+                :options="getAnimationDirectionOptions(element)"
+              />
+            </div>
             <div class="config-item">
               <div style="width: 35%;">持续时长：</div>
               <NumberInput 
-                :min="500"
-                :max="3000"
-                :step="500"
+                :min="100"
+                :max="10000"
+                :step="100"
                 :value="element.duration" 
                 @update:value="value => updateElementAnimationDuration(element.id, value)" 
                 style="width: 65%;" 
               />
             </div>
             <div class="config-item">
-              <div style="width: 35%;">触发方式：</div>
+              <div style="width: 35%;">延迟：</div>
+              <NumberInput
+                :min="0"
+                :max="10000"
+                :step="100"
+                :value="element.delay || 0"
+                @update:value="value => updateElementAnimationDelay(element.id, value)"
+                style="width: 65%;"
+              />
+            </div>
+            <div class="config-item">
+              <div style="width: 35%;">开始：</div>
               <Select
                 :value="element.trigger"
                 @update:value="value => updateElementAnimationTrigger(element.id, value as AnimationTrigger)"
                 style="width: 65%;"
                 :options="[
-                  { label: '主动触发', value: 'click' },
+                  { label: '单击时', value: 'click' },
                   { label: '与上一动画同时', value: 'meantime' },
                   { label: '上一动画之后', value: 'auto' },
                 ]"
+              />
+            </div>
+            <div class="config-item">
+              <div style="width: 35%;">重复：</div>
+              <Select
+                :value="element.repeatCount || 1"
+                @update:value="value => updateElementAnimationRepeat(element.id, Number(value))"
+                style="width: 65%;"
+                :options="[
+                  { label: '无', value: 1 },
+                  { label: '2 次', value: 2 },
+                  { label: '3 次', value: 3 },
+                  { label: '5 次', value: 5 },
+                  { label: '10 次', value: 10 },
+                ]"
+              />
+            </div>
+            <div class="config-item">
+              <div style="width: 35%;">速度曲线：</div>
+              <Select
+                :value="element.easing || 'ease'"
+                @update:value="value => updateElementAnimationEasing(element.id, String(value))"
+                style="width: 65%;"
+                :options="[
+                  { label: '平滑', value: 'ease' },
+                  { label: '匀速', value: 'linear' },
+                  { label: '平滑开始', value: 'ease-in' },
+                  { label: '平滑结束', value: 'ease-out' },
+                  { label: '平滑开始和结束', value: 'ease-in-out' },
+                ]"
+              />
+            </div>
+            <div class="config-item">
+              <div style="width: 35%;">自动翻转：</div>
+              <Switch
+                :value="!!element.autoReverse"
+                @update:value="value => updateElementAnimationAutoReverse(element.id, value)"
               />
             </div>
             <div class="config-item">
@@ -121,25 +176,31 @@
 import { computed, ref, watch } from 'vue'
 import { nanoid } from 'nanoid'
 import { storeToRefs } from 'pinia'
-import { useMainStore, useSlidesStore } from '@/store'
-import type { AnimationTrigger, AnimationType, PPTAnimation } from '@/types/slides'
 import {
   canonicalEffectFromLegacy,
+  defaultDirectionForEffect,
+  normalizeAnimationEffectId,
+  type AnimationDirection,
   type TimelineAnimation,
   type TimelineTrigger,
 } from '@pptist/presentation-core'
-import { 
+import { useMainStore, useSlidesStore } from '@/store'
+import type { AnimationTrigger, AnimationType, PPTAnimation } from '@/types/slides'
+import {
   ENTER_ANIMATIONS,
   EXIT_ANIMATIONS,
   ATTENTION_ANIMATIONS,
   ANIMATION_DEFAULT_DURATION,
   ANIMATION_DEFAULT_TRIGGER,
-  ANIMATION_CLASS_PREFIX,
+  getAnimationDirection,
+  getAnimationDirectionLabel,
+  getAnimationDirectionOptions,
+  getAnimationEffectLabel,
 } from '@/configs/animation'
 import { ELEMENT_TYPE_ZH } from '@/configs/element'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 import useSelectElement from '@/hooks/useSelectElement'
-import { runElementAnimation } from '@/utils/elementAnimation'
+import { runElementAnimation, type ElementAnimationHandle } from '@/utils/elementAnimation'
 
 import Tabs from '@/components/Tabs.vue'
 import Divider from '@/components/Divider.vue'
@@ -147,53 +208,46 @@ import Button from '@/components/Button.vue'
 import Draggable from 'vuedraggable'
 import NumberInput from '@/components/NumberInput.vue'
 import Select from '@/components/Select.vue'
+import Switch from '@/components/Switch.vue'
 import Popover from '@/components/Popover.vue'
-
-const animationEffects: Record<string, string> = {}
-for (const effect of ENTER_ANIMATIONS) {
-  for (const animation of effect.children) {
-    animationEffects[animation.value] = animation.name
-  }
-}
-for (const effect of EXIT_ANIMATIONS) {
-  for (const animation of effect.children) {
-    animationEffects[animation.value] = animation.name
-  }
-}
-for (const effect of ATTENTION_ANIMATIONS) {
-  for (const animation of effect.children) {
-    animationEffects[animation.value] = animation.name
-  }
-}
 
 interface TabItem {
   key: AnimationType
   label: string
-  color: string,
+  color: string
+}
+
+interface SequenceAnimation extends PPTAnimation {
+  index: number | ''
+  elType: string
+  animationEffect: string
+  directionLabel: string
 }
 
 const animationTypes: AnimationType[] = ['in', 'out', 'attention']
-
 const slidesStore = useSlidesStore()
 const { handleElement, handleElementId } = storeToRefs(useMainStore())
 const { currentSlide, formatedAnimations, currentSlideAnimations } = storeToRefs(slidesStore)
+const { addHistorySnapshot } = useHistorySnapshot()
+const { selectElement } = useSelectElement()
 
 const tabs: TabItem[] = [
   { key: 'in', label: '入场', color: '#68a490' },
   { key: 'out', label: '退场', color: '#d86344' },
   { key: 'attention', label: '强调', color: '#e8b76a' },
 ]
-const activeTab = ref('in')
+const activeTab = ref<AnimationType>('in')
 const animateIn = ref(false)
-watch(() => handleElementId.value, () => {
-  animationPoolVisible.value = false
-})
-
-const hoverPreviewAnimation = ref('')
 const animationPoolVisible = ref(false)
+const activeAnimationId = ref('')
+const handleAnimationId = ref('')
 
-const { addHistorySnapshot } = useHistorySnapshot()
-const { selectElement } = useSelectElement()
+watch(handleElementId, elementId => {
+  animationPoolVisible.value = false
+  const active = currentSlideAnimations.value.find(animation => animation.id === activeAnimationId.value)
+  if (active?.elId === elementId) return
+  activeAnimationId.value = currentSlideAnimations.value.find(animation => animation.elId === elementId)?.id || ''
+}, { immediate: true })
 
 const timelineTrigger = (trigger: AnimationTrigger): TimelineTrigger => {
   if (trigger === 'meantime') return 'withPrevious'
@@ -205,7 +259,7 @@ const toTimelineAnimation = (
   animation: PPTAnimation,
   existing?: TimelineAnimation,
 ): TimelineAnimation => {
-  const canonical = canonicalEffectFromLegacy(animation.effect, animation.type)
+  const canonical = canonicalEffectFromLegacy(animation.effect, animation.type, animation.direction)
   return {
     ...existing,
     id: animation.id,
@@ -222,6 +276,7 @@ const toTimelineAnimation = (
       ...existing?.effect,
       class: animation.type === 'in' ? 'entrance' : animation.type === 'out' ? 'exit' : 'emphasis',
       compatibility: canonical ? 'mapped' : existing?.effect.compatibility || 'approximate',
+      direction: canonical && 'direction' in canonical ? canonical.direction : undefined,
       canonical,
     },
   }
@@ -248,163 +303,197 @@ const commitAnimations = (animations: PPTAnimation[]) => {
   })
 }
 
-// 当前页面的动画列表
-const animationSequence = computed(() => {
-  const animationSequence = []
+const animationSequence = computed<SequenceAnimation[]>(() => {
+  const sequence: SequenceAnimation[] = []
   for (let i = 0; i < formatedAnimations.value.length; i++) {
-    const item = formatedAnimations.value[i]
-    for (let j = 0; j < item.animations.length; j++) {
-      const animation = item.animations[j]
-      const el = currentSlide.value.elements.find(el => el.id === animation.elId)
-      if (!el) continue
-
-      const elType = ELEMENT_TYPE_ZH[el.type]
-      const animationEffect = animationEffects[animation.effect]
-      animationSequence.push({
+    const step = formatedAnimations.value[i]
+    for (let j = 0; j < step.animations.length; j++) {
+      const animation = step.animations[j]
+      const element = currentSlide.value.elements.find(item => item.id === animation.elId)
+      if (!element) continue
+      sequence.push({
         ...animation,
         index: j === 0 ? i + 1 : '',
-        elType,
-        animationEffect,
+        elType: ELEMENT_TYPE_ZH[element.type],
+        animationEffect: getAnimationEffectLabel(animation.effect, animation.type),
+        directionLabel: getAnimationDirectionLabel(animation),
       })
     }
   }
-  return animationSequence
+  return sequence
 })
 
-// 当前选中元素的入场动画信息
-const handleElementAnimation = computed(() => {
-  const animations = currentSlideAnimations.value
-  const animation = animations.filter(item => item.elId === handleElementId.value)
-  return animation || []
-})
+const selectAnimation = (animation: PPTAnimation) => {
+  activeAnimationId.value = animation.id
+  selectElement(animation.elId)
+}
 
-// 删除元素动画
 const deleteAnimation = (id: string) => {
   const animations = currentSlideAnimations.value.filter(item => item.id !== id)
   commitAnimations(animations)
+  activeAnimationId.value = animations.find(item => item.elId === handleElementId.value)?.id || ''
   addHistorySnapshot()
 }
 
-// 拖拽修改动画顺序后同步数据
 const handleDragEnd = (eventData: { newIndex: number; oldIndex: number }) => {
   const { newIndex, oldIndex } = eventData
   if (newIndex === undefined || oldIndex === undefined || newIndex === oldIndex) return
-
   const animations: PPTAnimation[] = JSON.parse(JSON.stringify(currentSlideAnimations.value))
   const animation = animations[oldIndex]
   animations.splice(oldIndex, 1)
   animations.splice(newIndex, 0, animation)
-  
   commitAnimations(animations)
   addHistorySnapshot()
 }
 
-// 执行动画预览
-const runAnimation = (elId: string, effect: string, duration: number, type = activeTab.value as AnimationType) => {
-  const elRef = document.querySelector<HTMLElement>(`#editable-element-${elId} [class^=editable-element-]`)
-  if (elRef) {
-    const handle = runElementAnimation(elRef, {
-      id: 'preview',
-      elId,
-      effect,
-      type,
-      duration,
-      trigger: 'click',
-    })
-    handle.finished.then(() => window.setTimeout(handle.restore, 80))
-  }
+const animationElement = (elementId: string) => {
+  return document.querySelector<HTMLElement>(`#editable-element-${elementId} [class^=editable-element-]`)
 }
 
-// 执行所有动画预览
+const runAnimation = (animation: PPTAnimation, target = animationElement(animation.elId)) => {
+  if (!target) return undefined
+  return runElementAnimation(target, animation)
+}
+
+const previewAnimation = (animation: PPTAnimation) => {
+  const handle = runAnimation(animation)
+  handle?.finished.then(() => window.setTimeout(handle.restore, 80))
+}
+
+let poolPreviewHandle: ElementAnimationHandle | undefined
+const stopPoolPreview = () => {
+  poolPreviewHandle?.restore()
+  poolPreviewHandle = undefined
+}
+const previewPoolAnimation = (event: MouseEvent, type: AnimationType, effect: string) => {
+  stopPoolPreview()
+  const target = event.currentTarget as HTMLElement
+  const handle = runElementAnimation(target, {
+    id: 'pool-preview',
+    elId: 'pool-preview',
+    type,
+    effect,
+    direction: defaultDirectionForEffect(effect, type),
+    duration: 500,
+    trigger: 'click',
+  })
+  poolPreviewHandle = handle
+  handle.finished.then(() => window.setTimeout(() => {
+    if (poolPreviewHandle === handle) stopPoolPreview()
+  }, 80))
+}
+
+let sequencePreviewHandles: ElementAnimationHandle[] = []
+const stopSequencePreview = () => {
+  for (const handle of sequencePreviewHandles) handle.restore()
+  sequencePreviewHandles = []
+}
 const runAllAnimation = async () => {
-  animateIn.value = !animateIn.value
-  for (let i = 0; i < animationSequence.value.length; i++) {
-    if (!animateIn.value) break
-    const item = animationSequence.value[i]
-    if (item.index !== 1 && item.trigger !== 'meantime') await new Promise(resolve => setTimeout(resolve, item.duration + 100)) 
-    runAnimation(item.elId, item.effect, item.duration, item.type)
-    if (i >= animationSequence.value.length - 1) animateIn.value = false
+  if (animateIn.value) {
+    animateIn.value = false
+    stopSequencePreview()
+    return
   }
+  animateIn.value = true
+  for (const step of formatedAnimations.value) {
+    if (!animateIn.value) break
+    const handles = step.animations
+      .map(animation => runAnimation(animation))
+      .filter((handle): handle is ElementAnimationHandle => !!handle)
+    sequencePreviewHandles = handles
+    await Promise.all(handles.map(handle => handle.finished))
+    if (!animateIn.value) break
+    await new Promise(resolve => window.setTimeout(resolve, 80))
+    stopSequencePreview()
+  }
+  stopSequencePreview()
+  animateIn.value = false
 }
 
-// 修改元素动画持续时间
+const updateAnimationProps = (id: string, props: Partial<PPTAnimation>) => {
+  const animations = currentSlideAnimations.value.map(item => item.id === id ? { ...item, ...props } : item)
+  commitAnimations(animations)
+  addHistorySnapshot()
+}
+
 const updateElementAnimationDuration = (id: string, duration: number) => {
-  if (duration < 100 || duration > 5000) return
-
-  const animations = currentSlideAnimations.value.map(item => {
-    if (item.id === id) return { ...item, duration }
-    return item
+  if (duration < 100 || duration > 10000) return
+  updateAnimationProps(id, { duration })
+}
+const updateElementAnimationDelay = (id: string, delay: number) => {
+  if (delay < 0 || delay > 10000) return
+  updateAnimationProps(id, { delay })
+}
+const updateElementAnimationTrigger = (id: string, trigger: AnimationTrigger) => updateAnimationProps(id, { trigger })
+const updateElementAnimationRepeat = (id: string, repeatCount: number) => updateAnimationProps(id, { repeatCount })
+const updateElementAnimationEasing = (id: string, easing: string) => updateAnimationProps(id, { easing })
+const updateElementAnimationAutoReverse = (id: string, autoReverse: boolean) => updateAnimationProps(id, { autoReverse })
+const updateElementAnimationDirection = (id: string, direction: AnimationDirection) => {
+  const animation = currentSlideAnimations.value.find(item => item.id === id)
+  if (!animation) return
+  updateAnimationProps(id, {
+    effect: normalizeAnimationEffectId(animation.effect, animation.type),
+    direction,
   })
-  commitAnimations(animations)
-  addHistorySnapshot()
+  window.setTimeout(() => previewAnimation({ ...animation, effect: normalizeAnimationEffectId(animation.effect, animation.type), direction }), 0)
 }
 
-// 修改触发方式
-const updateElementAnimationTrigger = (id: string, trigger: AnimationTrigger) => {
-  const animations = currentSlideAnimations.value.map(item => {
-    if (item.id === id) return { ...item, trigger }
-    return item
-  })
-  commitAnimations(animations)
-  addHistorySnapshot()
-}
-
-// 修改元素动画，并执行一次预览
 const updateElementAnimation = (type: AnimationType, effect: string) => {
+  let changed: PPTAnimation | undefined
   const animations = currentSlideAnimations.value.map(item => {
-    if (item.id === handleAnimationId.value) return { ...item, type, effect }
-    return item
+    if (item.id !== handleAnimationId.value) return item
+    changed = {
+      ...item,
+      type,
+      effect,
+      direction: defaultDirectionForEffect(effect, type),
+    }
+    return changed
   })
   commitAnimations(animations)
   animationPoolVisible.value = false
+  handleAnimationId.value = ''
+  if (changed) activeAnimationId.value = changed.id
   addHistorySnapshot()
-
-  const animationItem = currentSlideAnimations.value.find(item => item.elId === handleElementId.value)
-  const duration = animationItem?.duration || ANIMATION_DEFAULT_DURATION
-
-  setTimeout(() => {
-    runAnimation(handleElementId.value, effect, duration, type)
-  }, 0)
+  if (changed) window.setTimeout(() => previewAnimation(changed!), 0)
 }
 
-const handleAnimationId = ref('')
-// 添加元素动画，并执行一次预览
 const addAnimation = (type: AnimationType, effect: string) => {
   if (handleAnimationId.value) {
     updateElementAnimation(type, effect)
     return
   }
-
-  const animations: PPTAnimation[] = JSON.parse(JSON.stringify(currentSlideAnimations.value))
-  animations.push({
+  const animation: PPTAnimation = {
     id: nanoid(10),
     elId: handleElementId.value,
     type,
     effect,
+    direction: defaultDirectionForEffect(effect, type),
     duration: ANIMATION_DEFAULT_DURATION,
     trigger: ANIMATION_DEFAULT_TRIGGER,
-  })
-  commitAnimations(animations)
+  }
+  commitAnimations([...currentSlideAnimations.value, animation])
   animationPoolVisible.value = false
+  activeAnimationId.value = animation.id
   addHistorySnapshot()
-
-  setTimeout(() => {
-    runAnimation(handleElementId.value, effect, ANIMATION_DEFAULT_DURATION, type)
-  }, 0)
+  window.setTimeout(() => previewAnimation(animation), 0)
 }
 
-// 动画选择面板打开600ms后再移除遮罩层，否则打开面板后迅速滑入鼠标预览会导致抖动
 const popoverMaskHide = ref(false)
 const handlePopoverVisibleChange = (visible: boolean) => {
-  if (visible) {
-    setTimeout(() => popoverMaskHide.value = true, 600)
+  if (visible) window.setTimeout(() => popoverMaskHide.value = true, 600)
+  else {
+    popoverMaskHide.value = false
+    stopPoolPreview()
+    handleAnimationId.value = ''
   }
-  else popoverMaskHide.value = false
 }
 
-const openAnimationPool = (elementId: string) => {
+const openAnimationPool = (animationId: string) => {
+  const animation = currentSlideAnimations.value.find(item => item.id === animationId)
+  if (animation) activeTab.value = animation.type
   animationPoolVisible.value = true
-  handleAnimationId.value = elementId
+  handleAnimationId.value = animationId
   handlePopoverVisibleChange(true)
 }
 
@@ -432,6 +521,12 @@ $attentionColor: #e8b76a;
 }
 .element-animation-btn {
   width: 100%;
+}
+.pane-title {
+  margin: -2px 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #555;
 }
 .config-item {
   display: flex;
@@ -544,6 +639,10 @@ $attentionColor: #e8b76a;
     }
     .text {
       flex: 6;
+
+      .direction {
+        color: #888;
+      }
     }
     .handler {
       flex: 2;

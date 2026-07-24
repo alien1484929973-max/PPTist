@@ -1,4 +1,9 @@
-import { canonicalEffectFromLegacy, createAnimationPlan } from '@pptist/presentation-core'
+import {
+  canonicalEffectFromLegacy,
+  createAnimationPlan,
+  runDomAnimation,
+  setDomAnimationFinalState,
+} from '@pptist/presentation-core'
 import { ANIMATION_CLASS_PREFIX } from '@/configs/animation'
 import type { PPTAnimation } from '@/types/slides'
 
@@ -33,10 +38,8 @@ const nativeAnimation = (
   element: HTMLElement,
   animation: PPTAnimation,
 ): ElementAnimationHandle | undefined => {
-  const effect = canonicalEffectFromLegacy(animation.effect, animation.type)
-  if (!effect || typeof element.animate !== 'function') return undefined
-
-  const snapshot = snapshotStyles(element)
+  const effect = canonicalEffectFromLegacy(animation.effect, animation.type, animation.direction)
+  if (!effect) return undefined
   const plan = createAnimationPlan(effect, {
     duration: animation.duration,
     delay: animation.delay || 0,
@@ -45,24 +48,7 @@ const nativeAnimation = (
     autoReverse: animation.autoReverse,
     easing: animation.easing,
   })
-  element.style.visibility = 'visible'
-  const running = element.animate(plan.keyframes as Keyframe[], plan.options as KeyframeAnimationOptions)
-  let cancelled = false
-
-  const finished = running.finished.then(() => {
-    if (cancelled) return
-    running.cancel()
-    restoreStyles(element, snapshot)
-    element.style.visibility = plan.finalVisibility
-  }).catch(() => undefined)
-
-  const restore = () => {
-    cancelled = true
-    running.cancel()
-    restoreStyles(element, snapshot)
-  }
-
-  return { finished, cancel: restore, restore }
+  return runDomAnimation(element, plan)
 }
 
 const legacyAnimation = (element: HTMLElement, animation: PPTAnimation): ElementAnimationHandle => {
@@ -126,10 +112,15 @@ export const runElementAnimation = (
 ): ElementAnimationHandle => nativeAnimation(element, animation) || legacyAnimation(element, animation)
 
 export const setElementAnimationFinalState = (element: HTMLElement, animation: PPTAnimation) => {
-  const effect = canonicalEffectFromLegacy(animation.effect, animation.type)
+  const effect = canonicalEffectFromLegacy(animation.effect, animation.type, animation.direction)
   if (effect) {
-    const plan = createAnimationPlan(effect, { duration: 0, delay: 0, trigger: 'click' })
-    element.style.visibility = plan.finalVisibility
+    const plan = createAnimationPlan(effect, {
+      duration: 0,
+      delay: 0,
+      trigger: 'click',
+      autoReverse: animation.autoReverse,
+    })
+    setDomAnimationFinalState(element, plan)
     return
   }
   if (animation.type === 'out') {

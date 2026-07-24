@@ -9,6 +9,7 @@ import type {
   TimelineAnimationClass,
   TimelineTrigger,
 } from './types'
+import { canonicalEffectFromTimeline, directionFromName } from './effects'
 
 export interface PptxSourceElementMetadata extends PptxElementSource {
   order: number
@@ -35,6 +36,7 @@ export interface LegacyPptAnimation {
   id: string
   elId: string
   effect: string
+  direction?: AnimationDirection
   type: 'in' | 'out' | 'attention'
   duration: number
   trigger: 'click' | 'meantime' | 'auto'
@@ -188,15 +190,6 @@ const animationClass = (value?: string): TimelineAnimationClass => {
   return 'unknown'
 }
 
-const parseEffectDirection = (value?: string): AnimationDirection | undefined => {
-  const descriptor = (value || '').toLowerCase()
-  if (descriptor.includes('left')) return 'left'
-  if (descriptor.includes('right')) return 'right'
-  if (descriptor.includes('up') || descriptor.includes('top')) return 'up'
-  if (descriptor.includes('down') || descriptor.includes('bottom')) return 'down'
-  return undefined
-}
-
 const parseTimeline = (document: XMLDocument, xmlRuntime: PptxXmlRuntime): AnimationTimeline | undefined => {
   const timing = firstByLocalName(document, 'timing')
   if (!timing) return undefined
@@ -237,18 +230,25 @@ const parseTimeline = (document: XMLDocument, xmlRuntime: PptxXmlRuntime): Anima
     const effectFilter = getAttribute(effect, 'filter')
     const effectTransition = getAttribute(effect, 'transition')
     const effectDescriptor = `${effectFilter || ''} ${effectTransition || ''}`.toLocaleLowerCase()
-    const parsedDirection = parseEffectDirection(effectDescriptor)
+    const parsedDirection = directionFromName(effectDescriptor)
     const isWipe = presetId === 22 || effectDescriptor.includes('wipe')
-    const canonical: CanonicalAnimationEffect | undefined = isWipe && parsedDirection
-      ? {
+    const phase = effectTransition === 'out' || parsedAnimationClass === 'exit' ? 'exit' : 'entrance'
+    const visibilityEffect = parsedAnimationClass === 'entrance' || parsedAnimationClass === 'exit'
+    let canonical: CanonicalAnimationEffect | undefined
+    if (visibilityEffect && isWipe && parsedDirection && ['left', 'right', 'up', 'down'].includes(parsedDirection)) {
+      canonical = {
         kind: 'wipe',
-        phase: effectTransition === 'out' || parsedAnimationClass === 'exit' ? 'exit' : 'entrance',
-        direction: parsedDirection,
+        phase,
+        direction: parsedDirection as 'left' | 'right' | 'up' | 'down',
       }
-      : undefined
-    const hasFlyDirection = ['left', 'right', 'up', 'top', 'down', 'bottom'].some(direction => effectDescriptor.includes(direction))
+    }
+    else if (visibilityEffect && presetId === 1) canonical = { kind: 'appear', phase }
+    else if (visibilityEffect && presetId === 10) canonical = { kind: 'fade', phase }
+    else if (visibilityEffect && presetId === 2 && parsedDirection) canonical = { kind: 'fly', phase, direction: parsedDirection }
+    else if (visibilityEffect && presetId === 23) canonical = { kind: 'zoom', phase }
+    else if (visibilityEffect && presetId === 26) canonical = { kind: 'bounce', phase }
     const hasLegacyEquivalent = (parsedAnimationClass === 'entrance' || parsedAnimationClass === 'exit') && (
-      [10, 23, 26, 32].includes(presetId || 0) || (presetId === 2 && hasFlyDirection) || (isWipe && !!parsedDirection)
+      !!canonical || presetId === 32
     )
     let compatibility: TimelineAnimation['effect']['compatibility'] = parsedAnimationClass === 'motionPath' || parsedAnimationClass === 'media' || parsedAnimationClass === 'unknown'
       ? 'unsupported'
@@ -312,10 +312,15 @@ const parseTimeline = (document: XMLDocument, xmlRuntime: PptxXmlRuntime): Anima
 
 const directionSuffix = (animation: TimelineAnimation) => {
   const descriptor = `${animation.effect.filter || ''} ${animation.effect.direction || ''}`.toLocaleLowerCase()
-  if (descriptor.includes('left')) return 'Left'
-  if (descriptor.includes('right')) return 'Right'
-  if (descriptor.includes('up') || descriptor.includes('top')) return 'Up'
-  if (descriptor.includes('down') || descriptor.includes('bottom')) return 'Down'
+  const direction = directionFromName(descriptor)
+  if (direction === 'topLeft') return 'TopLeft'
+  if (direction === 'topRight') return 'TopRight'
+  if (direction === 'bottomLeft') return 'BottomLeft'
+  if (direction === 'bottomRight') return 'BottomRight'
+  if (direction === 'left') return 'Left'
+  if (direction === 'right') return 'Right'
+  if (direction === 'up') return 'Up'
+  if (direction === 'down') return 'Down'
   return ''
 }
 
@@ -323,16 +328,15 @@ const legacyEffect = (animation: TimelineAnimation) => {
   const leaving = animation.effect.class === 'exit'
   const suffix = directionSuffix(animation)
   const presetId = animation.effect.presetId
+  const canonical = canonicalEffectFromTimeline(animation)
 
-  if (animation.effect.canonical?.kind === 'wipe') {
-    const direction = animation.effect.canonical.direction
-    const directionName = direction[0].toUpperCase() + direction.slice(1)
-    return `wipe${leaving ? 'Out' : 'In'}${directionName}`
-  }
+  if (canonical?.kind === 'appear') return leaving ? 'disappear' : 'appear'
+  if (canonical?.kind === 'fade') return leaving ? 'fadeOut' : 'fadeIn'
+  if (canonical?.kind === 'wipe') return leaving ? 'wipeOut' : 'wipeIn'
+  if (canonical?.kind === 'fly') return leaving ? 'flyOut' : 'flyIn'
+  if (canonical?.kind === 'zoom') return leaving ? 'zoomOut' : 'zoomIn'
+  if (canonical?.kind === 'bounce') return leaving ? 'bounceOut' : 'bounceIn'
   if (animation.effect.class === 'emphasis') return 'pulse'
-  if (presetId === 2 && suffix) return `fade${leaving ? 'Out' : 'In'}${suffix}`
-  if (presetId === 23) return leaving ? 'zoomOut' : 'zoomIn'
-  if (presetId === 26) return leaving ? 'bounceOut' : 'bounceIn'
   if (presetId === 32) {
     return leaving
       ? `lightSpeedOut${suffix === 'Left' ? 'Left' : 'Right'}`
@@ -352,11 +356,13 @@ export const createLegacyPptAnimations = (
     const sourceShapeId = animation.target.sourceShapeId
     const elId = sourceShapeId ? resolveElementId(sourceShapeId) : undefined
     if (!elId) return []
+    const canonical = canonicalEffectFromTimeline(animation)
 
     return [{
       id: animation.id,
       elId,
       effect: legacyEffect(animation),
+      direction: canonical && 'direction' in canonical ? canonical.direction : undefined,
       type: animation.effect.class === 'exit'
         ? 'out'
         : animation.effect.class === 'emphasis' ? 'attention' : 'in',

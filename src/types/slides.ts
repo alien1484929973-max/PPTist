@@ -1,4 +1,5 @@
 import type {
+  AnimationDirection,
   AnimationTimeline,
   PptxElementSource,
   SlideTransition,
@@ -700,6 +701,7 @@ export interface PPTAnimation {
   id: string
   elId: string
   effect: string
+  direction?: AnimationDirection
   type: AnimationType
   duration: number
   trigger: AnimationTrigger

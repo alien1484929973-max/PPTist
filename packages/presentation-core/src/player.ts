@@ -1,9 +1,11 @@
-import type { AnimationTimeline, TimelineAnimation } from './types'
+import type { AnimationTimeline, TimelineAnimation, TimelineTrigger } from './types'
 
-export interface TimelineStep {
-  animations: TimelineAnimation[]
+export interface AnimationStep<T> {
+  animations: T[]
   autoAdvance: boolean
 }
+
+export type TimelineStep = AnimationStep<TimelineAnimation>
 
 export interface PlayableSlide {
   id: string
@@ -16,14 +18,24 @@ export type PlayerAction =
   | { type: 'start' }
   | { type: 'end' }
 
-export const compileTimeline = (timeline?: AnimationTimeline): TimelineStep[] => {
-  if (!timeline) return []
-
-  const steps: TimelineStep[] = []
-  for (const animation of timeline.animations) {
-    const trigger = animation.timing.trigger
+/**
+ * Compiles PowerPoint's On Click / With Previous / After Previous rules into
+ * renderer-neutral playback steps. targetKey prevents two simultaneous
+ * effects from fighting over the same target; the later effect wins.
+ */
+export const compileAnimationSteps = <T>(
+  animations: readonly T[],
+  triggerOf: (animation: T) => TimelineTrigger,
+  targetKey?: (animation: T) => string | undefined,
+): AnimationStep<T>[] => {
+  const steps: AnimationStep<T>[] = []
+  for (const animation of animations) {
+    const trigger = triggerOf(animation)
     if (trigger === 'withPrevious' && steps.length) {
-      steps[steps.length - 1].animations.push(animation)
+      const step = steps[steps.length - 1]
+      const target = targetKey?.(animation)
+      if (target) step.animations = step.animations.filter(item => targetKey?.(item) !== target)
+      step.animations.push(animation)
       continue
     }
 
@@ -33,6 +45,15 @@ export const compileTimeline = (timeline?: AnimationTimeline): TimelineStep[] =>
     steps.push({ animations: [animation], autoAdvance: false })
   }
   return steps
+}
+
+export const compileTimeline = (timeline?: AnimationTimeline): TimelineStep[] => {
+  if (!timeline) return []
+  return compileAnimationSteps(
+    timeline.animations,
+    animation => animation.timing.trigger,
+    animation => animation.target.elementId || animation.target.sourceShapeId,
+  )
 }
 
 /**

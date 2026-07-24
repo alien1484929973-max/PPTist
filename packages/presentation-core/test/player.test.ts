@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   PresentationPlayerController,
+  compileAnimationSteps,
   compileTimeline,
   type AnimationTimeline,
   type TimelineAnimation,
@@ -44,4 +45,25 @@ test('player controller advances animation steps before changing slides', () => 
   assert.deepEqual(controller.next(), { type: 'end' })
   assert.deepEqual(controller.previous(), { type: 'slide', slideIndex: 0 })
   assert.equal(controller.stepIndex, 2)
+})
+
+test('framework-independent compiler also handles editor trigger adapters', () => {
+  const editorAnimations = [
+    { id: 'one', target: 'a', trigger: 'click' },
+    { id: 'replace-one', target: 'a', trigger: 'meantime' },
+    { id: 'together', target: 'b', trigger: 'meantime' },
+    { id: 'after', target: 'c', trigger: 'auto' },
+  ] as const
+  const steps = compileAnimationSteps(
+    editorAnimations,
+    item => item.trigger === 'meantime' ? 'withPrevious' : item.trigger === 'auto' ? 'afterPrevious' : 'click',
+    item => item.target,
+  )
+  assert.deepEqual(steps.map(step => ({
+    ids: step.animations.map(item => item.id),
+    autoAdvance: step.autoAdvance,
+  })), [
+    { ids: ['replace-one', 'together'], autoAdvance: true },
+    { ids: ['after'], autoAdvance: false },
+  ])
 })

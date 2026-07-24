@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { omit } from 'lodash'
+import { compileAnimationSteps, type TimelineTrigger } from '@pptist/presentation-core'
 import type { Slide, SlideTheme, PPTElement, PPTAnimation, SlideTemplate } from '@/types/slides'
 
 interface RemovePropData {
@@ -89,25 +90,15 @@ export const useSlidesStore = defineStore('slides', {
       const elIds = els.map(el => el.id)
       const animations = currentSlide.animations.filter(animation => elIds.includes(animation.elId))
 
-      const formatedAnimations: FormatedAnimation[] = []
-      for (const animation of animations) {
-        if (animation.trigger === 'click' || !formatedAnimations.length) {
-          formatedAnimations.push({ animations: [animation], autoNext: false })
-        }
-        else if (animation.trigger === 'meantime') {
-          const last = formatedAnimations[formatedAnimations.length - 1]
-          last.animations = last.animations.filter(item => item.elId !== animation.elId)
-          last.animations.push(animation)
-          formatedAnimations[formatedAnimations.length - 1] = last
-        }
-        else if (animation.trigger === 'auto') {
-          const last = formatedAnimations[formatedAnimations.length - 1]
-          last.autoNext = true
-          formatedAnimations[formatedAnimations.length - 1] = last
-          formatedAnimations.push({ animations: [animation], autoNext: false })
-        }
+      const triggerOf = (animation: PPTAnimation): TimelineTrigger => {
+        if (animation.trigger === 'meantime') return 'withPrevious'
+        if (animation.trigger === 'auto') return 'afterPrevious'
+        return 'click'
       }
-      return formatedAnimations
+      return compileAnimationSteps(animations, triggerOf, animation => animation.elId).map((step): FormatedAnimation => ({
+        animations: step.animations,
+        autoNext: step.autoAdvance,
+      }))
     },
   },
 
