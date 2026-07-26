@@ -2,23 +2,21 @@
 
 PPTist 的框架无关浏览器播放器。运行时只使用普通 DOM、TypeScript、Web Animations API 和内置的 ECharts SVG 图表适配层，不依赖 Vue，也不需要 iframe。
 
-当前版本：`0.1.0-beta.2`。Beta 在 PPTist 自身的桌面放映、演讲者视图、观众窗口和移动播放路径中实际调用；编辑器也从包的 `exports` 加载构建后的 `dist`，不再使用仅仓库可见的源码别名。稳定版会在截图/浏览器基准持续通过后发布为 `0.1.0`。
+当前版本：`0.1.0`。该稳定版在 PPTist 自身的桌面放映、演讲者视图、观众窗口和移动播放路径中实际调用；编辑器也从包的 `exports` 加载构建后的 `dist`，不再使用旧 Vue 播放回退。
 
 ## 安装
 
-当前 Beta 的正式交付物是 PPTist 官网离线包：
+从 npm 官方注册表安装：
 
 ```bash
-npm install https://<PPTist官网域名>/downloads/pptist-presentation-player-0.1.0-beta.2.tgz
+npm install pptist-presentation-player@0.1.0
 ```
 
-下载文件和 `SHA256SUMS.txt` 后，也可以校验并从本地安装：
+也可以从官网下载离线包，校验 `SHA256SUMS.txt` 后从本地安装：
 
 ```bash
-npm install ./pptist-presentation-player-0.1.0-beta.2.tgz
+npm install ./pptist-presentation-player-0.1.0.tgz
 ```
-
-当前包尚未发布到 npm 官方注册表；注册表发布后才可使用 `npm install pptist-presentation-player@0.1.0-beta.2`。
 
 ## 使用
 
@@ -30,6 +28,8 @@ const player = createPresentationPlayer(
   presentationDocument,
   {
     keyboard: true,
+    keyboardScope: 'document',
+    wheel: true,
     clickToAdvance: true,
     fit: 'contain',
     onStateChange: state => console.log(state.slideIndex, state.stepIndex),
@@ -159,6 +159,6 @@ npm run verify:consumer
 npm pack --dry-run
 ```
 
-`verify` 直接导入 `dist`，用 JSON 和 DOM 完成构建产物冒烟；`verify:consumer` 生成 tarball、安装到临时空项目并从包名导入，避免工作区路径掩盖缺文件或错误 `exports`。包提供 ESM 产物和完整 TypeScript 声明。ECharts 与 tinycolor2 是普通运行时依赖，发布产物不包含 Vue runtime。版本遵循 SemVer：Beta 期间允许在发行说明中标注的 schema/API 调整；`0.1.0` 后破坏性公共 API 变更只进入新的次版本/主版本。
+`verify` 直接导入 `dist`，用 JSON 和 DOM 完成构建产物冒烟；`verify:consumer` 生成 tarball、安装到临时空项目并从包名导入，避免工作区路径掩盖缺文件或错误 `exports`。包提供 ESM 产物和完整 TypeScript 声明。ECharts 与 tinycolor2 是普通运行时依赖，发布产物不包含 Vue runtime。版本遵循 SemVer：`0.1.0` 后破坏性公共 API 变更只进入新的次版本/主版本。
 
 本包是 PPTist 项目的一部分，使用 `AGPL-3.0-only` 许可证。通过网络向用户提供修改版本时，请履行 AGPL 对应源码义务；闭源商业集成前应自行确认许可要求。

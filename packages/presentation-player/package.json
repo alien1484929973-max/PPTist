@@ -1,6 +1,6 @@
 {
   "name": "pptist-presentation-player",
-  "version": "0.1.0-beta.2",
+  "version": "0.1.0",
   "description": "Framework-independent DOM player for PPTist presentation documents",
   "type": "module",
   "sideEffects": false,
