@@ -4,13 +4,7 @@
 
 ## 1. 获取和校验
 
-Node.js 要求 `>=18`。推荐从 npm 安装：
-
-```bash
-npm install pptist-presentation-player@0.1.0-beta.2
-```
-
-也可以从部署后的 PPTist 官网下载离线包：
+Node.js 要求 `>=18`。当前 Beta 的正式交付物是 PPTist 官网离线包：
 
 ```text
 /downloads/pptist-presentation-player-0.1.0-beta.2.tgz
@@ -22,6 +16,14 @@ npm install pptist-presentation-player@0.1.0-beta.2
 ```bash
 npm install ./pptist-presentation-player-0.1.0-beta.2.tgz
 ```
+
+也可以直接使用完整官网下载地址安装：
+
+```bash
+npm install https://<PPTist官网域名>/downloads/pptist-presentation-player-0.1.0-beta.2.tgz
+```
+
+当前包尚未发布到 npm 官方注册表；注册表发布完成后才可使用 `npm install pptist-presentation-player@0.1.0-beta.2`。不要把包名安装失败误判为本地构建问题。
 
 ## 2. 最小接入
 

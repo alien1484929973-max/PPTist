@@ -6,15 +6,19 @@ PPTist 的框架无关浏览器播放器。运行时只使用普通 DOM、TypeSc
 
 ## 安装
 
+当前 Beta 的正式交付物是 PPTist 官网离线包：
+
 ```bash
-npm install pptist-presentation-player
+npm install https://<PPTist官网域名>/downloads/pptist-presentation-player-0.1.0-beta.2.tgz
 ```
 
-在仓库内也可以安装 `npm pack` 生成的 tarball：
+下载文件和 `SHA256SUMS.txt` 后，也可以校验并从本地安装：
 
 ```bash
 npm install ./pptist-presentation-player-0.1.0-beta.2.tgz
 ```
+
+当前包尚未发布到 npm 官方注册表；注册表发布后才可使用 `npm install pptist-presentation-player@0.1.0-beta.2`。
 
 ## 使用
 
