@@ -262,6 +262,9 @@ export interface PlayerDocument {
   lastSlideIndex?: number
 }
 
+/** A synchronously consumable presentation document or its JSON text. */
+export type PlayerDocumentSource = PlayerDocument | string
+
 export interface ElementRendererContext {
   element: PlayerElement
   slide: PlayerSlide
@@ -275,6 +278,43 @@ export interface ElementRendererContext {
 
 export type PlayerElementRenderer = (context: ElementRendererContext) => HTMLElement | SVGElement | void
 export type PlayerResourceKind = 'image' | 'media' | 'poster' | 'pattern' | 'background' | 'link'
+
+export type PlayerResourceClassification = 'remote' | 'relative' | 'embedded' | 'session' | 'unsupported' | 'missing'
+
+export interface PlayerResourceReference {
+  kind: PlayerResourceKind
+  url: string
+  resolvedUrl?: string
+  classification: PlayerResourceClassification
+  slideIndex: number
+  slideId: string
+  elementId?: string
+  path: string
+}
+
+export interface PlayerResourceIssue {
+  code: 'missing' | 'relative' | 'session-url' | 'embedded-data' | 'unsupported-protocol'
+  severity: 'warning' | 'blocking'
+  message: string
+  resource: PlayerResourceReference
+}
+
+export interface PlayerResourceReport {
+  portable: boolean
+  resources: PlayerResourceReference[]
+  issues: PlayerResourceIssue[]
+}
+
+export interface AnalyzePlayerResourcesOptions {
+  /** Base used to resolve relative JSON resource URLs. */
+  baseUrl?: string
+  /** Relative URLs are portable only when explicitly allowed or a baseUrl is supplied. */
+  allowRelativeUrls?: boolean
+  /** data: URLs are self-contained and allowed by default. */
+  allowDataUrls?: boolean
+  /** blob: URLs are page-session scoped and rejected by default. */
+  allowBlobUrls?: boolean
+}
 
 export interface PlayerState {
   slideIndex: number
@@ -294,6 +334,8 @@ export interface PlayerOptions {
   renderers?: Record<string, PlayerElementRenderer>
   /** PPTist text is HTML. Supply a sanitizer when documents are not trusted. */
   sanitizeHtml?: (html: string) => string
+  /** Resolve relative media URLs against the JSON document's original location. */
+  resourceBaseUrl?: string
   /** Allow, rewrite, or reject (with null) external resource URLs from untrusted documents. */
   resolveResourceUrl?: (url: string, kind: PlayerResourceKind) => string | null
   onStateChange?: (state: PlayerState) => void
@@ -302,7 +344,7 @@ export interface PlayerOptions {
 
 export interface PresentationPlayer {
   readonly state: PlayerState
-  load: (presentation: PlayerDocument, startIndex?: number) => void
+  load: (presentation: PlayerDocumentSource, startIndex?: number) => void
   play: () => Promise<PlayerState>
   next: () => Promise<PlayerState>
   previous: () => Promise<PlayerState>

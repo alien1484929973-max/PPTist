@@ -19,9 +19,11 @@ import {
   renderElement,
 } from './renderer'
 import { asCoreTimeline, timelineForSlide } from './timeline'
-import { assertPlayerDocument } from './schema'
+import { parsePlayerDocument } from './schema'
+import { resolvePlayerResourceUrl } from './resources'
 import type {
   PlayerDocument,
+  PlayerDocumentSource,
   PlayerElement,
   PlayerOptions,
   PlayerSlide,
@@ -146,9 +148,9 @@ export class DomPresentationPlayer implements PresentationPlayer {
     }
   }
 
-  load(presentation: PlayerDocument, startIndex = this.options.startIndex || 0) {
+  load(source: PlayerDocumentSource, startIndex = this.options.startIndex || 0) {
     if (this.destroyed) throw new Error('The presentation player has been destroyed.')
-    assertPlayerDocument(presentation)
+    const presentation = parsePlayerDocument(source)
 
     this.presentation = presentation
     const slides: PlayablePlayerSlide[] = presentation.slides.map(slide => ({
@@ -283,7 +285,7 @@ export class DomPresentationPlayer implements PresentationPlayer {
       background,
       slide.background,
       this.presentation.theme?.backgroundColor,
-      url => this.options.resolveResourceUrl ? this.options.resolveResourceUrl(url, 'background') : url,
+      url => resolvePlayerResourceUrl(url, 'background', this.options),
     )
     layer.appendChild(background)
     this.canvas.appendChild(layer)
@@ -680,7 +682,7 @@ export class DomPresentationPlayer implements PresentationPlayer {
 
 export const createPresentationPlayer = (
   container: HTMLElement,
-  presentation: PlayerDocument,
+  presentation: PlayerDocumentSource,
   options: PlayerOptions = {},
 ): PresentationPlayer => {
   const player = new DomPresentationPlayer(container, options)

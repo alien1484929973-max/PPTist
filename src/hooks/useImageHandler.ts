@@ -2,8 +2,11 @@ import { type Ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useMainStore, useSlidesStore } from '@/store'
 import type { PPTImageElement } from '@/types/slides'
-import { getImageDataURL, getImageSize } from '@/utils/image'
+import { getImageSize } from '@/utils/image'
+import { mediaUploadErrorMessage } from '@/services/media'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
+import useMediaUpload from '@/hooks/useMediaUpload'
+import message from '@/utils/message'
 
 export default () => {
   const mainStore = useMainStore()
@@ -13,14 +16,17 @@ export default () => {
   const handleImageElement = handleElement as Ref<PPTImageElement>
 
   const { addHistorySnapshot } = useHistorySnapshot()
+  const { uploadImage } = useMediaUpload()
 
-  const replaceImage = (files: FileList) => {
+  const replaceImage = async (files: FileList) => {
     const imageFile = files[0]
     const imageElement = handleImageElement.value
     const imageElementId = handleElementId.value
     if (!imageFile || !imageElement || imageElement.type !== 'image' || !imageElementId) return
 
-    getImageDataURL(imageFile).then(dataURL => {
+    try {
+      const asset = await uploadImage(imageFile)
+      const src = asset.publicUrl
       const originWidth = imageElement.width
       const originHeight = imageElement.height
       const originLeft = imageElement.left
@@ -28,7 +34,7 @@ export default () => {
       const centerX = originLeft + originWidth / 2
       const centerY = originTop + originHeight / 2
 
-      getImageSize(dataURL).then(({ width, height }) => {
+      getImageSize(src).then(({ width, height }) => {
         const h = originHeight
         const w = width * (originHeight / height)
         const l = centerX - w / 2
@@ -39,7 +45,7 @@ export default () => {
           slidesStore.updateElement({
             id: imageElementId,
             props: {
-              src: dataURL,
+              src,
               width: w,
               height: h,
               left: l,
@@ -58,12 +64,15 @@ export default () => {
           })
           slidesStore.updateElement({
             id: imageElementId,
-            props: { src: dataURL, width: w, height: h, left: l, top: t },
+            props: { src, width: w, height: h, left: l, top: t },
           })
         }
         addHistorySnapshot()
       })
-    })
+    }
+    catch (error) {
+      message.error(mediaUploadErrorMessage(error))
+    }
   }
 
   return {

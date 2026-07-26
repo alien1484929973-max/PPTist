@@ -3,6 +3,12 @@ import { Buffer } from 'node:buffer'
 import { createServer } from 'node:http'
 import process from 'node:process'
 import { createDatabasePool, ensureSchema } from './database.mjs'
+import {
+  deleteMediaCredential,
+  getMediaSettings,
+  saveMediaCredential,
+  uploadDocumentMedia,
+} from './media.mjs'
 import { verifyPassword } from './password.mjs'
 
 const host = process.env.PPTIST_CLOUD_HOST || '127.0.0.1'
@@ -176,6 +182,39 @@ const handleRequest = async (req, res) => {
     const user = await requireUser(req, res)
     if (!user) return
     return sendJson(res, 200, { user })
+  }
+
+  if (path === '/api/cloud/media/settings') {
+    const user = await requireUser(req, res)
+    if (!user) return
+    if (method === 'GET') {
+      return sendJson(res, 200, { settings: await getMediaSettings(pool, user.id) })
+    }
+    if (method === 'PUT') {
+      const body = await readJson(req)
+      const settings = await saveMediaCredential(pool, user.id, body.apiKey)
+      return sendJson(res, 200, { settings })
+    }
+    if (method === 'DELETE') {
+      await deleteMediaCredential(pool, user.id)
+      return sendJson(res, 200, { ok: true })
+    }
+    return sendJson(res, 405, { error: 'method_not_allowed' })
+  }
+
+  const mediaUploadMatch = path.match(/^\/api\/cloud\/documents\/([0-9a-f-]+)\/media$/i)
+  if (mediaUploadMatch) {
+    if (method !== 'PUT') return sendJson(res, 405, { error: 'method_not_allowed' })
+    const user = await requireUser(req, res)
+    if (!user) return
+    const result = await uploadDocumentMedia({
+      req,
+      pool,
+      user,
+      documentId: mediaUploadMatch[1],
+      requestUrl: url,
+    })
+    return sendJson(res, 201, result)
   }
 
   if (path === '/api/cloud/documents' && method === 'GET') {

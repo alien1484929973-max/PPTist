@@ -1,5 +1,6 @@
 <template>
   <button 
+    :type="nativeType"
     class="button"
     :class="{
       'disabled': disabled,
@@ -26,6 +27,7 @@ const props = withDefaults(defineProps<{
   size?: 'small' | 'normal'
   first?: boolean
   last?: boolean
+  nativeType?: 'button' | 'submit' | 'reset'
 }>(), {
   checked: false,
   disabled: false,
@@ -33,6 +35,7 @@ const props = withDefaults(defineProps<{
   size: 'normal',
   first: false,
   last: false,
+  nativeType: 'button',
 })
 
 const emit = defineEmits<{

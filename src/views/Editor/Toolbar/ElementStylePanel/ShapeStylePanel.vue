@@ -234,9 +234,11 @@ import { storeToRefs } from 'pinia'
 import { useMainStore, useSlidesStore } from '@/store'
 import type { GradientType, PPTShapeElement, Gradient, ShapeText, TextInset } from '@/types/slides'
 import { type ShapePoolItem, SHAPE_LIST, SHAPE_PATH_FORMULAS } from '@/configs/shapes'
-import { getImageDataURL } from '@/utils/image'
+import { mediaUploadErrorMessage } from '@/services/media'
 import emitter, { EmitterEvents } from '@/utils/emitter'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
+import useMediaUpload from '@/hooks/useMediaUpload'
+import message from '@/utils/message'
 import useShapeFormatPainter from '@/hooks/useShapeFormatPainter'
 
 import ElementOpacity from '../common/ElementOpacity.vue'
@@ -312,6 +314,7 @@ watch(handleElementId, () => {
 })
 
 const { addHistorySnapshot } = useHistorySnapshot()
+const { uploadImage } = useMediaUpload()
 const { toggleShapeFormatPainter } = useShapeFormatPainter()
 
 const updateElement = (props: Partial<PPTShapeElement>) => {
@@ -351,13 +354,17 @@ const updateGradientColors = (color: string) => {
 }
 
 // 上传填充图片
-const uploadPattern = (files: FileList) => {
+const uploadPattern = async (files: FileList) => {
   const imageFile = files[0]
   if (!imageFile) return
-  getImageDataURL(imageFile).then(dataURL => {
-    pattern.value = dataURL
-    updateElement({ pattern: dataURL })
-  })
+  try {
+    const asset = await uploadImage(imageFile)
+    pattern.value = asset.publicUrl
+    updateElement({ pattern: asset.publicUrl })
+  }
+  catch (error) {
+    message.error(mediaUploadErrorMessage(error))
+  }
 }
 
 // 设置填充色

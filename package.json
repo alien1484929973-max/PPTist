@@ -7,8 +7,10 @@
     "packages/*"
   ],
   "scripts": {
+    "predev": "npm run build:player",
     "dev": "vite",
-    "build": "npm run type-check && npm run build-only && node scripts/assemble-dist.mjs",
+    "clean": "node scripts/clean.mjs",
+    "build": "npm run build:player && npm run type-check && npm run build-only && npm run pack:player && node scripts/assemble-dist.mjs",
     "preview": "vite preview",
     "cloud-server": "node backend/index.mjs",
     "db:migrate:sqlite": "node scripts/migrate-sqlite-to-postgres.mjs",
@@ -17,7 +19,8 @@
     "test:core": "node --import tsx --test packages/presentation-core/test/*.test.ts",
     "test:player": "npm run test --workspace pptist-presentation-player",
     "build:player": "npm run build --workspace pptist-presentation-player",
-    "verify:player-package": "npm run verify --workspace pptist-presentation-player",
+    "pack:player": "node scripts/pack-player.mjs",
+    "verify:player-package": "npm run build:player && npm run verify --workspace pptist-presentation-player && npm run verify:consumer --workspace pptist-presentation-player",
     "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix --ignore-path .gitignore",
     "prepare": "husky install"
   },
@@ -41,6 +44,7 @@
     "number-precision": "^1.6.0",
     "pg": "^8.16.3",
     "pinia": "^3.0.2",
+    "pptist-presentation-player": "0.1.0-beta.2",
     "pptxgenjs": "^3.12.0",
     "pptxtojson": "^2.1.0",
     "prosemirror-commands": "^1.6.0",

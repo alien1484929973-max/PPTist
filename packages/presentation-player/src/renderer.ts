@@ -13,6 +13,7 @@ import type {
 import { renderPresentationChart, type PlayerChartData, type PlayerChartType } from './chart'
 import tinycolor from 'tinycolor2'
 import { getPresentationLinePath, getPresentationLineRenderPath } from '@pptist/presentation-core'
+import { resolvePlayerResourceUrl } from './resources'
 import { PRESENTATION_IMAGE_CLIP_PATHS } from './image'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
@@ -583,8 +584,7 @@ export const renderElement = (
 
   const sanitizeHtml = options.sanitizeHtml || ((html: string) => html)
   const resolveResourceUrl = (url: string, kind: Parameters<NonNullable<PlayerOptions['resolveResourceUrl']>>[1]) => {
-    if (!url) return null
-    return options.resolveResourceUrl ? options.resolveResourceUrl(url, kind) : url
+    return resolvePlayerResourceUrl(url, kind, options)
   }
   const context: ElementRendererContext = {
     element,

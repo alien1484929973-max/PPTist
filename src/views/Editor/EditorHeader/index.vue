@@ -56,7 +56,14 @@
         <div class="menu-item"><i-icon-park-outline:hamburger-button class="icon" /></div>
       </Popover>
 
-      <div class="menu-item cloud-library" v-tooltip="'我的文稿'" @click="documentManagerVisible = true">
+      <div
+        class="menu-item cloud-library"
+        data-testid="cloud-library-button"
+        role="button"
+        aria-label="我的文稿"
+        v-tooltip="'我的文稿'"
+        @click="documentManagerVisible = true"
+      >
         <i-icon-park-outline:folder-open class="icon" />
       </div>
 

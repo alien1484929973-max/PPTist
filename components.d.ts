@@ -127,6 +127,7 @@ declare module 'vue' {
     'IIconParkOutline:sendToBack': typeof import('~icons/icon-park-outline/send-to-back')['default']
     'IIconParkOutline:sentToBack': typeof import('~icons/icon-park-outline/sent-to-back')['default']
     'IIconParkOutline:SentToBack': typeof import('~icons/icon-park-outline/sent-to-back')['default']
+    'IIconParkOutline:settingTwo': typeof import('~icons/icon-park-outline/setting-two')['default']
     'IIconParkOutline:slideTwo': typeof import('~icons/icon-park-outline/slide-two')['default']
     'IIconParkOutline:square': typeof import('~icons/icon-park-outline/square')['default']
     'IIconParkOutline:stopwatchStart': typeof import('~icons/icon-park-outline/stopwatch-start')['default']

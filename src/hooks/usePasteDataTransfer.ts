@@ -1,11 +1,13 @@
-import { MIME_MAP } from '@/configs/mime'
-import { getImageDataURL } from '@/utils/image'
+import { mediaUploadErrorMessage } from '@/services/media'
 import useCreateElement from './useCreateElement'
 import useImport from './useImport'
+import useMediaUpload from './useMediaUpload'
+import message from '@/utils/message'
 
 export default () => {
   const { createImageElement, createVideoElement, createAudioElement } = useCreateElement()
   const { importSpecificFile, importPPTXFile } = useImport()
+  const { upload, uploadImage } = useMediaUpload()
 
   const pasteDataTransfer = (dataTransfer: DataTransfer) => {
     const dataItems = dataTransfer.items
@@ -19,25 +21,27 @@ export default () => {
         if (item.type.indexOf('image') !== -1) {
           const imageFile = item.getAsFile()
           if (imageFile) {
-            getImageDataURL(imageFile).then(dataURL => createImageElement(dataURL))
+            uploadImage(imageFile)
+              .then(asset => createImageElement(asset.publicUrl))
+              .catch(error => message.error(mediaUploadErrorMessage(error)))
             isFile = true
           }
         }
         else if (item.type.indexOf('video') !== -1) {
           const videoFile = item.getAsFile()
           if (videoFile) {
-            const videoURL = URL.createObjectURL(videoFile)
-            const ext = MIME_MAP[videoFile.type] || ''
-            createVideoElement(videoURL, ext)
+            upload(videoFile, 'video')
+              .then(asset => createVideoElement(asset.publicUrl, asset.extension))
+              .catch(error => message.error(mediaUploadErrorMessage(error)))
             isFile = true
           }
         }
         else if (item.type.indexOf('audio') !== -1) {
           const audioFile = item.getAsFile()
           if (audioFile) {
-            const audioURL = URL.createObjectURL(audioFile)
-            const ext = MIME_MAP[audioFile.type] || ''
-            createAudioElement(audioURL, ext)
+            upload(audioFile, 'audio')
+              .then(asset => createAudioElement(asset.publicUrl, asset.extension))
+              .catch(error => message.error(mediaUploadErrorMessage(error)))
             isFile = true
           }
         }

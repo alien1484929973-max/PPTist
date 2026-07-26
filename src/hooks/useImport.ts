@@ -3,6 +3,7 @@ import { storeToRefs } from 'pinia'
 import { parse, type Shape, type Element, type ChartItem, type BaseElement } from 'pptxtojson'
 import { nanoid } from 'nanoid'
 import tinycolor from 'tinycolor2'
+import { analyzePresentationResources, readPlayerDocument } from 'pptist-presentation-player'
 import {
   createLegacyPptAnimations,
   parsePptxImportMetadata,
@@ -15,7 +16,11 @@ import { type ShapePoolItem, SHAPE_LIST, SHAPE_PATH_FORMULAS } from '@/configs/s
 import useAddSlidesOrElements from '@/hooks/useAddSlidesOrElements'
 import useSlideHandler from '@/hooks/useSlideHandler'
 import useHistorySnapshot from './useHistorySnapshot'
+import useMediaUpload from './useMediaUpload'
 import message from '@/utils/message'
+import { mediaUploadErrorMessage } from '@/services/media'
+import { migratePresentation } from '@/utils/presentation'
+import type { MediaKind } from '@/types/media'
 import { getSvgPathRange, toPoints } from '@/utils/svgPathParser'
 import { loadGoogleFonts } from '@/utils/font'
 import {
@@ -337,73 +342,170 @@ export default () => {
   const { addHistorySnapshot } = useHistorySnapshot()
   const { addSlidesFromData } = useAddSlidesOrElements()
   const { isEmptySlide } = useSlideHandler()
+  const { upload } = useMediaUpload()
 
   const exporting = ref(false)
 
-  // 导入JSON文件
-  const importJSON = (files: FileList | File[], cover = false) => {
-    const file = files[0]
+  type ParsedPptx = Awaited<ReturnType<typeof parse>>
+  type ImportedFill = {
+    type?: string
+    value?: { ref?: string; base64?: string; blob?: string }
+  }
+  type ImportedElement = Element & {
+    ref?: string
+    base64?: string
+    blob?: string
+    picRef?: string
+    picBase64?: string
+    picBlob?: string
+    fill?: ImportedFill
+    elements?: ImportedElement[]
+  }
 
-    const reader = new FileReader()
-    reader.addEventListener('load', () => {
-      try {
-        const { title, slides, theme, width, height } = JSON.parse(reader.result as string)
-        const aspectRatio = getAspectRatio(width, height)
+  const materializePptxMedia = async (presentation: ParsedPptx) => {
+    const tasks: Array<() => Promise<void>> = []
+    const uploads = new Map<string, Promise<{ publicUrl: string }>>()
 
-        if (cover) {
-          slidesStore.updateSlideIndex(0)
-          slidesStore.setSlides(slides, (theme || {}))
-          if (title) slidesStore.setTitle(title)
-          if (aspectRatio !== viewportRatio.value) slidesStore.setViewportRatio(aspectRatio)
-          if (width && width !== viewportSize) slidesStore.setViewportSize(width)
-          addHistorySnapshot()
+    const sourceFilename = (refValue: string | undefined, fallback: string) => {
+      const name = String(refValue || '').split(/[\\/]/).pop()
+      return name || fallback
+    }
+
+    const queue = (
+      source: string | undefined,
+      kind: Exclude<MediaKind, 'poster'>,
+      filename: string,
+      apply: (publicUrl: string) => void,
+    ) => {
+      if (!source) return
+      tasks.push(async () => {
+        if (/^https:\/\//i.test(source)) {
+          apply(source)
+          return
         }
-        else if (isEmptySlide.value) {
-          slidesStore.setSlides(slides, (theme || {}))
-          if (aspectRatio !== viewportRatio.value) slidesStore.setViewportRatio(aspectRatio)
-          if (width && width !== viewportSize) slidesStore.setViewportSize(width)
-          addHistorySnapshot()
+        const key = `${kind}:${source}`
+        let pending = uploads.get(key)
+        if (!pending) {
+          pending = (async () => {
+            const response = await fetch(source)
+            if (!response.ok) throw new Error('embedded_media_unreadable')
+            const blob = await response.blob()
+            const actualKind: MediaKind = kind === 'image' && (blob.type === 'image/svg+xml' || /\.svg$/i.test(filename))
+              ? 'svg'
+              : kind
+            const asset = await upload(blob, actualKind, { filename })
+            return { publicUrl: asset.publicUrl }
+          })().finally(() => {
+            if (source.startsWith('blob:')) URL.revokeObjectURL(source)
+          })
+          uploads.set(key, pending)
         }
-        else addSlidesFromData(slides)
+        apply((await pending).publicUrl)
+      })
+    }
+
+    const queueFill = (fill: ImportedFill | undefined, fallback: string) => {
+      if (fill?.type !== 'image' || !fill.value) return
+      const value = fill.value
+      const source = value.blob || value.base64
+      queue(source, 'image', sourceFilename(value.ref, fallback), publicUrl => {
+        value.blob = publicUrl
+        value.base64 = publicUrl
+      })
+    }
+
+    const walkElements = (elements: Element[]) => {
+      for (const sourceElement of elements) {
+        const element = sourceElement as ImportedElement
+        queueFill(element.fill, 'shape-fill.png')
+
+        if (element.type === 'image') {
+          queue(element.blob || element.base64, 'image', sourceFilename(element.ref, 'image.png'), publicUrl => {
+            element.blob = publicUrl
+            element.base64 = publicUrl
+          })
+        }
+        else if (element.type === 'math') {
+          queue(element.picBlob || element.picBase64, 'image', sourceFilename(element.picRef, 'formula.png'), publicUrl => {
+            element.picBlob = publicUrl
+            element.picBase64 = publicUrl
+          })
+        }
+        else if (element.type === 'audio') {
+          queue(element.blob, 'audio', sourceFilename(element.ref, 'audio.mp3'), publicUrl => {
+            element.blob = publicUrl
+          })
+        }
+        else if (element.type === 'video') {
+          queue(element.blob, 'video', sourceFilename(element.ref, 'video.mp4'), publicUrl => {
+            element.blob = publicUrl
+          })
+        }
+
+        if (Array.isArray(element.elements)) walkElements(element.elements as Element[])
       }
-      catch {
-        message.error('无法正确读取 / 解析该文件')
+    }
+
+    for (const slide of presentation.slides) {
+      queueFill(slide.fill as ImportedFill, 'slide-background.png')
+      walkElements(slide.elements)
+      walkElements(slide.layoutElements || [])
+    }
+
+    let nextTask = 0
+    const worker = async () => {
+      while (nextTask < tasks.length) {
+        const task = tasks[nextTask++]
+        await task()
       }
-    })
-    reader.readAsText(file)
+    }
+    await Promise.all(Array.from({ length: Math.min(2, tasks.length) }, worker))
+  }
+
+  const applyImportedPresentation = (input: unknown, cover: boolean) => {
+    const { title, slides, theme: importedTheme, width, height } = migratePresentation(input)
+    const aspectRatio = getAspectRatio(width, height)
+
+    if (cover || isEmptySlide.value) {
+      slidesStore.updateSlideIndex(0)
+      slidesStore.setSlides(slides, importedTheme || {})
+      if (title) slidesStore.setTitle(title)
+      if (aspectRatio !== viewportRatio.value) slidesStore.setViewportRatio(aspectRatio)
+      if (width && width !== viewportSize.value) slidesStore.setViewportSize(width)
+      addHistorySnapshot()
+    }
+    else addSlidesFromData(slides)
+  }
+
+  const auditAndApplyImportedPresentation = async (input: unknown, cover: boolean) => {
+    const presentation = await readPlayerDocument(input)
+    const resources = analyzePresentationResources(presentation)
+    if (!resources.portable) {
+      const blocking = resources.issues.filter(issue => issue.severity === 'blocking').length
+      message.warning(`文稿已导入，但包含 ${blocking} 个不可移植资源；对外播放前请改为可访问链接`)
+    }
+    applyImportedPresentation(presentation, cover)
+  }
+
+  // JSON and external consumers use the exact same parser/schema gate from the package.
+  const importJSON = async (files: FileList | File[], cover = false) => {
+    try {
+      await auditAndApplyImportedPresentation(files[0], cover)
+    }
+    catch {
+      message.error('无法正确读取 / 解析该 JSON，或文稿版本不受支持')
+    }
   }
 
   // 导入pptist文件
-  const importSpecificFile = (files: FileList | File[], cover = false) => {
-    const file = files[0]
-
-    const reader = new FileReader()
-    reader.addEventListener('load', () => {
-      try {
-        const { title, slides, theme, width, height } = JSON.parse(decrypt(reader.result as string))
-        const aspectRatio = getAspectRatio(width, height)
-
-        if (cover) {
-          slidesStore.updateSlideIndex(0)
-          slidesStore.setSlides(slides, (theme || {}))
-          if (title) slidesStore.setTitle(title)
-          if (aspectRatio !== viewportRatio.value) slidesStore.setViewportRatio(aspectRatio)
-          if (width && width !== viewportSize) slidesStore.setViewportSize(width)
-          addHistorySnapshot()
-        }
-        else if (isEmptySlide.value) {
-          slidesStore.setSlides(slides, (theme || {}))
-          if (aspectRatio !== viewportRatio.value) slidesStore.setViewportRatio(aspectRatio)
-          if (width && width !== viewportSize) slidesStore.setViewportSize(width)
-          addHistorySnapshot()
-        }
-        else addSlidesFromData(slides)
-      }
-      catch {
-        message.error('无法正确读取 / 解析该文件')
-      }
-    })
-    reader.readAsText(file)
+  const importSpecificFile = async (files: FileList | File[], cover = false) => {
+    try {
+      const encrypted = await files[0].text()
+      await auditAndApplyImportedPresentation(decrypt(encrypted), cover)
+    }
+    catch {
+      message.error('无法正确读取 / 解析该文件')
+    }
   }
 
   const rotateLine = (line: PPTLineElement, angleDeg: number) => {
@@ -684,15 +786,19 @@ export default () => {
         // higher peak memory footprint.
         const importMetadata = await parsePptxImportMetadata(arrayBuffer).catch(() => ({ slides: [] }))
         const parsedPresentation = await parse(arrayBuffer, {
-          imageMode: 'base64',
+          imageMode: 'blob',
           videoMode: 'blob',
           audioMode: 'blob',
         })
+        await materializePptxMedia(parsedPresentation)
         json = { ...parsedPresentation, importMetadata }
       }
-      catch {
+      catch (error) {
         exporting.value = false
-        message.error('无法正确读取 / 解析该文件')
+        const uploadMessage = mediaUploadErrorMessage(error)
+        message.error(uploadMessage === '媒体上传失败，请稍后重试'
+          ? '无法正确读取或解析该PPTX文件'
+          : `PPTX媒体上传失败：${uploadMessage}`)
         return
       }
 

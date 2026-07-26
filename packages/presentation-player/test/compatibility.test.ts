@@ -4,8 +4,11 @@ import {
   PRESENTATION_PLAYER_COMPATIBILITY,
   PRESENTATION_IMAGE_CLIP_PATHS,
   analyzePresentationCompatibility,
+  analyzePresentationResources,
   assertPlayerDocument,
   getChartOption,
+  parsePlayerDocument,
+  readPlayerDocument,
   type PlayerDocument,
 } from '../src/index'
 
@@ -83,4 +86,39 @@ test('schema validation accepts legacy/current documents and rejects future vers
   assert.equal(assertPlayerDocument({ ...base, schemaVersion: 1 }).schemaVersion, 1)
   assert.equal(assertPlayerDocument({ ...base, schemaVersion: 2 }).schemaVersion, 2)
   assert.throws(() => assertPlayerDocument({ ...base, schemaVersion: 99 }), /Unsupported presentation schema version/)
+})
+
+test('JSON text, File-like inputs, and parsed objects share one schema gate', async () => {
+  const source = JSON.stringify({
+    schemaVersion: 2,
+    width: 1000,
+    height: 562.5,
+    slides: [{ id: 'one', elements: [] }],
+  })
+  assert.equal(parsePlayerDocument(source).slides[0].id, 'one')
+  assert.equal((await readPlayerDocument(new Blob([source], { type: 'application/json' }))).schemaVersion, 2)
+  assert.throws(() => parsePlayerDocument('{broken'), /Invalid presentation JSON/)
+})
+
+test('resource audit distinguishes portable links from session and host-relative URLs', () => {
+  const document: PlayerDocument = {
+    width: 1000,
+    height: 562.5,
+    slides: [{
+      id: 'one',
+      background: { type: 'image', image: { src: 'https://media.example.test/background.png' } },
+      elements: [
+        { id: 'image', type: 'image', left: 0, top: 0, width: 100, height: 100, src: '/images/photo.png' },
+        { id: 'video', type: 'video', left: 0, top: 0, width: 100, height: 100, src: 'blob:session-video' },
+      ],
+    }],
+  }
+  const strict = analyzePresentationResources(document)
+  assert.equal(strict.portable, false)
+  assert.deepEqual(strict.issues.map(issue => issue.code), ['relative', 'session-url'])
+
+  document.slides[0].elements[1].src = 'https://media.example.test/video.mp4'
+  const based = analyzePresentationResources(document, { baseUrl: 'https://cdn.example.test/decks/demo.json' })
+  assert.equal(based.portable, true)
+  assert.equal(based.resources.find(resource => resource.elementId === 'image')?.resolvedUrl, 'https://cdn.example.test/images/photo.png')
 })

@@ -17,6 +17,7 @@ import { storeToRefs } from 'pinia'
 import { useSlidesStore } from '@/store'
 import useExport from '@/hooks/useExport'
 import Button from '@/components/Button.vue'
+import { serializePresentation } from '@/utils/presentation'
 
 const emit = defineEmits<{
   (event: 'close'): void
@@ -26,13 +27,10 @@ const { slides, viewportRatio, title, viewportSize, theme } = storeToRefs(useSli
 const { exportJSON } = useExport()
 
 const json = computed(() => {
-  return {
-    title: title.value,
-    width: viewportSize.value,
-    height: viewportSize.value * viewportRatio.value,
-    theme: theme.value,
-    slides: slides.value,
-  }
+  // Keep dependencies explicit so this preview recomputes on every store change,
+  // while the actual JSON shape comes from the canonical serializer.
+  void [slides.value, viewportRatio.value, title.value, viewportSize.value, theme.value]
+  return serializePresentation()
 })
 </script>
 

@@ -5,7 +5,7 @@
 <script lang="ts" setup>
 import { onMounted, onUnmounted, useTemplateRef, watch } from 'vue'
 import type { ChartData, ChartOptions, ChartType } from '@/types/slides'
-import { renderPresentationChart, type PlayerChartHandle } from '@pptist/presentation-player'
+import { renderPresentationChart, type PlayerChartHandle } from 'pptist-presentation-player'
 
 const props = defineProps<{
   width: number

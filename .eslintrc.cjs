@@ -11,6 +11,24 @@ module.exports = {
   parserOptions: {
     ecmaVersion: 'latest'
   },
+  overrides: [
+    {
+      files: [
+        'backend/**/*.mjs',
+        'scripts/**/*.mjs',
+        'packages/*/scripts/**/*.mjs',
+      ],
+      env: {
+        node: true,
+      },
+    },
+    {
+      files: ['src/hooks/useImport.ts'],
+      rules: {
+        'max-lines': 'off',
+      },
+    },
+  ],
   rules: {
     'curly': ['error', 'multi-line'],
     'eqeqeq': ['error', 'always'],

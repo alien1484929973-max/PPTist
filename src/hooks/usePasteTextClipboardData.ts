@@ -2,10 +2,13 @@ import { storeToRefs } from 'pinia'
 import { useKeyboardStore } from '@/store'
 import { pasteCustomClipboardString } from '@/utils/clipboard'
 import { parseText2Paragraphs } from '@/utils/textParser'
-import { getImageDataURL, isSVGString, svg2File } from '@/utils/image'
+import { isSVGString, svg2File } from '@/utils/image'
 import { isValidURL } from '@/utils/common'
+import { mediaUploadErrorMessage } from '@/services/media'
 import useCreateElement from '@/hooks/useCreateElement'
 import useAddSlidesOrElements from '@/hooks/useAddSlidesOrElements'
+import useMediaUpload from '@/hooks/useMediaUpload'
+import message from '@/utils/message'
 
 interface PasteTextClipboardDataOptions {
   onlySlide?: boolean
@@ -21,7 +24,8 @@ interface PasteTextClipboardDataOptions {
 const isValidImgURL = (url: string) => {
   const pexels = /^https?:\/\/(?:[a-zA-Z0-9-]+\.)*pexels\.com\/[^\s]+\.(?:jpg|jpeg|png|svg|webp)(?:\?.*)?$/i.test(url)
   const pptist = /^https?:\/\/(?:[a-zA-Z0-9-]+\.)*pptist\.cn\/[^\s]+\.(?:jpg|jpeg|png|svg|webp)(?:\?.*)?$/i.test(url)
-  return pexels || pptist
+  const ownMedia = /^https:\/\/media\.kjxs\.site\/[^\s]+\.(?:jpg|jpeg|png|gif|svg|webp|avif)(?:\?.*)?$/i.test(url)
+  return pexels || pptist || ownMedia
 }
 
 export default () => {
@@ -29,6 +33,7 @@ export default () => {
 
   const { createTextElement, createImageElement } = useCreateElement()
   const { addElementsFromData, addSlidesFromData } = useAddSlidesOrElements()
+  const { uploadImage } = useMediaUpload()
 
   /**
    * 粘贴普通文本：创建为新的文本元素
@@ -81,7 +86,9 @@ export default () => {
         // 尝试检查是否为SVG代码
         else if (isSVGString(clipboardData)) {
           const file = svg2File(clipboardData)
-          getImageDataURL(file).then(dataURL => createImageElement(dataURL))
+          uploadImage(file)
+            .then(asset => createImageElement(asset.publicUrl))
+            .catch(error => message.error(mediaUploadErrorMessage(error)))
         }
         // 普通文字
         else {

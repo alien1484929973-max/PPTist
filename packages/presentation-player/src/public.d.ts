@@ -3,10 +3,14 @@ export * from './types'
 import type { EChartsOption } from 'echarts'
 
 import type {
+  AnalyzePlayerResourcesOptions,
   PlayerAnimationTimeline,
   PlayerDocument,
+  PlayerDocumentSource,
   PlayerLegacyAnimation,
   PlayerOptions,
+  PlayerResourceKind,
+  PlayerResourceReport,
   PlayerSlide,
   PlayerState,
   PresentationPlayer,
@@ -48,6 +52,19 @@ export declare const CURRENT_PLAYER_SCHEMA_VERSION: 2
 export declare const SUPPORTED_PLAYER_SCHEMA_VERSIONS: readonly [1, 2]
 export declare const validatePlayerDocument: (input: unknown) => string[]
 export declare const assertPlayerDocument: (input: unknown) => PlayerDocument
+export declare const parsePlayerDocument: (input: unknown) => PlayerDocument
+export declare const readPlayerDocument: (input: unknown) => Promise<PlayerDocument>
+
+export declare const analyzePresentationResources: (
+  presentation: PlayerDocument,
+  options?: AnalyzePlayerResourcesOptions,
+) => PlayerResourceReport
+
+export declare const resolvePlayerResourceUrl: (
+  url: string,
+  kind: PlayerResourceKind,
+  options: Pick<PlayerOptions, 'resourceBaseUrl' | 'resolveResourceUrl'>,
+) => string | null
 
 export type CompatibilityStatus = 'supported' | 'partial' | 'adapter' | 'unsupported'
 export interface CompatibilityMatrixEntry {
@@ -80,7 +97,7 @@ export declare const timelineForSlide: (slide: PlayerSlide) => PlayerAnimationTi
 export declare class DomPresentationPlayer implements PresentationPlayer {
   constructor(host: HTMLElement, options?: PlayerOptions)
   get state(): PlayerState
-  load(presentation: PlayerDocument, startIndex?: number): void
+  load(presentation: PlayerDocumentSource, startIndex?: number): void
   play(): Promise<PlayerState>
   next(): Promise<PlayerState>
   previous(): Promise<PlayerState>
@@ -92,6 +109,6 @@ export declare class DomPresentationPlayer implements PresentationPlayer {
 
 export declare const createPresentationPlayer: (
   container: HTMLElement,
-  presentation: PlayerDocument,
+  presentation: PlayerDocumentSource,
   options?: PlayerOptions,
 ) => PresentationPlayer

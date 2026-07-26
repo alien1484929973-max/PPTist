@@ -1,4 +1,4 @@
-import type { CloudDocument, CloudDocumentSummary, CloudUser, PresentationContent } from '@/types/cloud'
+import type { CloudDocument, CloudDocumentSummary, CloudUser, MediaSettings, PresentationContent } from '@/types/cloud'
 
 const API_BASE = '/api/cloud'
 
@@ -44,6 +44,21 @@ export const cloudApi = {
 
   me() {
     return request<{ user: CloudUser }>('/auth/me')
+  },
+
+  getMediaSettings() {
+    return request<{ settings: MediaSettings }>('/media/settings')
+  },
+
+  saveMediaSettings(apiKey: string) {
+    return request<{ settings: MediaSettings }>('/media/settings', {
+      method: 'PUT',
+      body: JSON.stringify({ apiKey }),
+    })
+  },
+
+  deleteMediaSettings() {
+    return request<{ ok: true }>('/media/settings', { method: 'DELETE' })
   },
 
   listDocuments() {

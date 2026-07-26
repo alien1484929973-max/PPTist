@@ -334,7 +334,9 @@ import { PRESET_THEMES } from '@/configs/theme'
 import { FONTS } from '@/configs/font'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 import useSlideTheme from '@/hooks/useSlideTheme'
-import { getImageDataURL } from '@/utils/image'
+import { mediaUploadErrorMessage } from '@/services/media'
+import useMediaUpload from '@/hooks/useMediaUpload'
+import message from '@/utils/message'
 import { toFixed } from '@/utils/common'
 
 import ThemeStylesExtract from './ThemeStylesExtract.vue'
@@ -376,6 +378,7 @@ const background = computed(() => {
 })
 
 const { addHistorySnapshot } = useHistorySnapshot()
+const { uploadImage } = useMediaUpload()
 const {
   applyPresetTheme,
   applyThemeToAllSlides,
@@ -450,10 +453,16 @@ const updateImageBackground = (props: Partial<SlideBackgroundImage>) => {
 }
 
 // 上传背景图片
-const uploadBackgroundImage = (files: FileList) => {
+const uploadBackgroundImage = async (files: FileList) => {
   const imageFile = files[0]
   if (!imageFile) return
-  getImageDataURL(imageFile).then(dataURL => updateImageBackground({ src: dataURL }))
+  try {
+    const asset = await uploadImage(imageFile)
+    updateImageBackground({ src: asset.publicUrl })
+  }
+  catch (error) {
+    message.error(mediaUploadErrorMessage(error))
+  }
 }
 
 // 应用当前页背景到全部页面

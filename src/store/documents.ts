@@ -1,6 +1,12 @@
 import { defineStore } from 'pinia'
 import type { CloudAuthStatus, CloudDocument, CloudDocumentSummary, CloudSaveStatus, CloudUser } from '@/types/cloud'
 import { CloudApiError, cloudApi } from '@/services/cloud'
+import {
+  hasPendingMediaUploads,
+  materializePresentationMedia,
+  mediaUploadErrorMessage,
+  MediaUploadError,
+} from '@/services/media'
 import { applyPresentation, createBlankPresentation, serializePresentation } from '@/utils/presentation'
 import { useMainStore } from './main'
 import { useSlidesStore } from './slides'
@@ -139,6 +145,10 @@ export const useDocumentsStore = defineStore('documents', {
     },
 
     canLeaveCurrentDocument() {
+      if (hasPendingMediaUploads()) {
+        this.error = '媒体正在上传，请等待上传完成后再切换'
+        return false
+      }
       if (savePromise || this.saveStatus === 'saving') {
         this.error = '文稿正在保存，请等待保存完成后再切换'
         return false
@@ -233,6 +243,11 @@ export const useDocumentsStore = defineStore('documents', {
       if (savePromise) return savePromise
       if (!this.activeDocumentId || !this.dirty) return true
       if (this.saveStatus === 'conflict') return false
+      if (hasPendingMediaUploads()) {
+        this.saveStatus = 'dirty'
+        this.error = '媒体正在上传，请等待上传完成后再保存'
+        return false
+      }
 
       const documentId = this.activeDocumentId
       const revision = this.activeRevision
@@ -251,6 +266,16 @@ export const useDocumentsStore = defineStore('documents', {
 
       savePromise = (async () => {
         try {
+          const materializedCount = await materializePresentationMedia(documentId, content)
+          if (materializedCount && this.activeDocumentId === documentId) {
+            this.suspendTracking = true
+            try {
+              useSlidesStore().setSlides(content.slides)
+            }
+            finally {
+              this.suspendTracking = false
+            }
+          }
           const { document } = await cloudApi.saveDocument(documentId, content.title, content, revision)
           if (this.activeDocumentId === documentId) {
             this.activeRevision = document.revision
@@ -270,7 +295,9 @@ export const useDocumentsStore = defineStore('documents', {
           }
           else {
             this.saveStatus = 'error'
-            this.error = '云端保存失败，修改仍保留在当前页面'
+            this.error = error instanceof MediaUploadError
+              ? `${mediaUploadErrorMessage(error)}，文稿尚未保存`
+              : '云端保存失败，修改仍保留在当前页面'
             if (error instanceof CloudApiError && error.status === 401) this.authStatus = 'unauthenticated'
           }
           return false

@@ -172,13 +172,15 @@
 import { ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useMainStore, useSlidesStore, useSnapshotStore } from '@/store'
-import { getImageDataURL } from '@/utils/image'
+import { mediaUploadErrorMessage } from '@/services/media'
 import type { ShapePoolItem } from '@/configs/shapes'
 import type { LinePoolItem } from '@/configs/lines'
 import type { PPTShapeElement } from '@/types/slides'
 import useScaleCanvas from '@/hooks/useScaleCanvas'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 import useCreateElement from '@/hooks/useCreateElement'
+import useMediaUpload from '@/hooks/useMediaUpload'
+import message from '@/utils/message'
 
 import ShapePool from './ShapePool.vue'
 import LinePool from './LinePool.vue'
@@ -200,6 +202,7 @@ const { canUndo, canRedo } = storeToRefs(useSnapshotStore())
 const { theme, viewportRatio, viewportSize } = storeToRefs(slidesStore)
 
 const { redo, undo } = useHistorySnapshot()
+const { uploadImage } = useMediaUpload()
 
 const {
   scaleCanvas,
@@ -226,10 +229,16 @@ const {
   createShapeElement,
 } = useCreateElement()
 
-const insertImageElement = (files: FileList) => {
+const insertImageElement = async (files: FileList) => {
   const imageFile = files[0]
   if (!imageFile) return
-  getImageDataURL(imageFile).then(dataURL => createImageElement(dataURL))
+  try {
+    const asset = await uploadImage(imageFile)
+    createImageElement(asset.publicUrl)
+  }
+  catch (error) {
+    message.error(mediaUploadErrorMessage(error))
+  }
 }
 
 const shapePoolVisible = ref(false)

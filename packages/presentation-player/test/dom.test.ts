@@ -97,3 +97,34 @@ test('standalone navigation completes slide transitions and Morph', async () => 
   player.destroy()
   await window.happyDOM.abort()
 })
+
+test('the public player accepts JSON text and resolves linked media from its document base', async () => {
+  const { window, host } = installDom()
+  const { createPresentationPlayer } = await import('../src/index')
+  const player = createPresentationPlayer(host, JSON.stringify({
+    schemaVersion: 2,
+    width: 1000,
+    height: 562.5,
+    slides: [
+      {
+        id: 'one',
+        elements: [{ id: 'image', type: 'image', left: 0, top: 0, width: 100, height: 100, src: './media/photo.png' }],
+      },
+      {
+        id: 'two',
+        transition: { type: 'fade', duration: 1 },
+        elements: [{ id: 'title', type: 'text', left: 0, top: 0, width: 300, height: 60, content: '<p>Second</p>' }],
+      },
+    ],
+  }), {
+    resourceBaseUrl: 'https://cdn.example.test/decks/demo.json',
+  })
+
+  assert.equal((host.querySelector('img') as HTMLImageElement).src, 'https://cdn.example.test/decks/media/photo.png')
+  assert.equal(player.state.slideCount, 2)
+  await player.next()
+  assert.equal(player.state.slideIndex, 1)
+  assert.equal(host.querySelector('.pptist-player-text')?.textContent, 'Second')
+  player.destroy()
+  await window.happyDOM.abort()
+})

@@ -13,7 +13,7 @@ import {
   type ElementAnimationHandle,
 } from '@/utils/elementAnimation'
 import type { DomAnimationTargets } from '@pptist/presentation-core'
-import type { PlayerState, PresentationPlayer } from '@pptist/presentation-player'
+import type { PlayerState, PresentationPlayer } from 'pptist-presentation-player'
 
 const AUDIENCE_SYNC_CHANNEL = 'pptist-audience-sync'
 

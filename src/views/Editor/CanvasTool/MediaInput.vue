@@ -10,7 +10,7 @@
       <Input v-model:value="videoSrc" placeholder="请输入视频地址，e.g. https://xxx.mp4"></Input>
       <div class="btns">
         <FileInput accept="video/*" @change="files => uploadVideo(files)">
-          <Button><i-icon-park-outline:upload /> 上传本地视频</Button>
+          <Button :disabled="uploading"><i-icon-park-outline:upload /> {{ uploadLabel }}</Button>
         </FileInput>
         <div class="group">
           <Button @click="emit('close')" style="margin-right: 10px;">取消</Button>
@@ -23,7 +23,7 @@
       <Input v-model:value="audioSrc" placeholder="请输入音频地址，e.g. https://xxx.mp3"></Input>
       <div class="btns">
         <FileInput accept="audio/*" @change="files => uploadAudio(files)">
-          <Button><i-icon-park-outline:upload /> 上传本地音频</Button>
+          <Button :disabled="uploading"><i-icon-park-outline:upload /> {{ uploadLabel }}</Button>
         </FileInput>
         <div class="group">
           <Button @click="emit('close')" style="margin-right: 10px;">取消</Button>
@@ -35,9 +35,10 @@
 </template>
 
 <script lang="ts" setup>
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import message from '@/utils/message'
-import { MIME_MAP } from '@/configs/mime'
+import { mediaUploadErrorMessage } from '@/services/media'
+import useMediaUpload from '@/hooks/useMediaUpload'
 import Tabs from '@/components/Tabs.vue'
 import Input from '@/components/Input.vue'
 import Button from '@/components/Button.vue'
@@ -56,6 +57,10 @@ const emit = defineEmits<{
 }>()
 
 const type = ref<TypeKey>('video')
+const uploading = ref(false)
+const uploadProgress = ref(0)
+const uploadLabel = computed(() => uploading.value ? `上传中 ${uploadProgress.value}%` : `上传本地${type.value === 'video' ? '视频' : '音频'}`)
+const { upload } = useMediaUpload()
 
 const videoSrc = ref('https://videos.pexels.com/video-files/29261597/12623866_640_360_24fps.mp4')
 const audioSrc = ref('https://freesound.org/data/previews/614/614107_11861866-lq.mp3')
@@ -75,18 +80,38 @@ const insertAudio = () => {
   emit('insertAudio', { src: audioSrc.value })
 }
 
-const uploadVideo = (files: FileList) => {
+const uploadVideo = async (files: FileList) => {
   const file = files[0]
-  if (!file) return
-  const ext = MIME_MAP[file.type] || ''
-  emit('insertVideo', { src: URL.createObjectURL(file), ext })
+  if (!file || uploading.value) return
+  uploading.value = true
+  uploadProgress.value = 0
+  try {
+    const asset = await upload(file, 'video', { onProgress: progress => uploadProgress.value = progress.percentage })
+    emit('insertVideo', { src: asset.publicUrl, ext: asset.extension })
+  }
+  catch (error) {
+    message.error(mediaUploadErrorMessage(error))
+  }
+  finally {
+    uploading.value = false
+  }
 }
 
-const uploadAudio = (files: FileList) => {
+const uploadAudio = async (files: FileList) => {
   const file = files[0]
-  if (!file) return
-  const ext = MIME_MAP[file.type] || ''
-  emit('insertAudio', { src: URL.createObjectURL(file), ext })
+  if (!file || uploading.value) return
+  uploading.value = true
+  uploadProgress.value = 0
+  try {
+    const asset = await upload(file, 'audio', { onProgress: progress => uploadProgress.value = progress.percentage })
+    emit('insertAudio', { src: asset.publicUrl, ext: asset.extension })
+  }
+  catch (error) {
+    message.error(mediaUploadErrorMessage(error))
+  }
+  finally {
+    uploading.value = false
+  }
 }
 </script>
 

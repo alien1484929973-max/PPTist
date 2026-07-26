@@ -69,7 +69,7 @@ import { storeToRefs } from 'pinia'
 import { useSlidesStore } from '@/store'
 import type { Mode } from '@/types/mobile'
 import { useDependencyPresentationPlayer } from '@/configs/presentationPlayer'
-import type { PlayerState, PresentationPlayer } from '@pptist/presentation-player'
+import type { PlayerState, PresentationPlayer } from 'pptist-presentation-player'
 import useSlidesWithTurningMode from '../Screen/hooks/useSlidesWithTurningMode'
 
 import ThumbnailSlide from '@/views/components/ThumbnailSlide/index.vue'

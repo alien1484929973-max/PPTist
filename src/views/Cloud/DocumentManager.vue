@@ -12,7 +12,10 @@
           <h2>我的文稿</h2>
           <p>共 {{ documents.length }} 个云端文稿</p>
         </div>
-        <Button type="primary" @click="create()"><i-icon-park-outline:plus /> 新建文稿</Button>
+        <div class="manager-header-actions">
+          <Button @click="mediaSettingsVisible = true"><i-icon-park-outline:setting-two /> 媒体中心</Button>
+          <Button type="primary" @click="create()"><i-icon-park-outline:plus /> 新建文稿</Button>
+        </div>
       </div>
 
       <div class="manager-error" v-if="error">{{ error }}</div>
@@ -32,7 +35,14 @@
               <span v-if="document.id === activeDocumentId">当前</span>
             </div>
             <div class="document-meta">
-              {{ document.slideCount }} 页 · {{ formatTime(document.updatedAt) }}
+              <span>{{ document.slideCount }} 页 · {{ formatTime(document.updatedAt) }}</span>
+              <button
+                class="media-space-id"
+                title="点击复制，可在媒体中心搜索此 ID"
+                @click.stop="copyMediaSpaceId(document.id)"
+              >
+                媒体 ID：{{ getMediaSpaceId(document.id) }}
+              </button>
             </div>
           </div>
           <div class="document-actions">
@@ -53,24 +63,44 @@
       </div>
     </div>
   </Modal>
+
+  <Modal v-model:visible="mediaSettingsVisible" :width="520" closeButton>
+    <MediaSettingsPanel v-if="mediaSettingsVisible" />
+  </Modal>
 </template>
 
 <script lang="ts" setup>
+import { ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useDocumentsStore } from '@/store'
 import message from '@/utils/message'
 import Modal from '@/components/Modal.vue'
 import Button from '@/components/Button.vue'
+import MediaSettingsPanel from './MediaSettingsPanel.vue'
 
 withDefaults(defineProps<{ visible: boolean, width?: number }>(), { width: 760 })
 const emit = defineEmits<{ (event: 'update:visible', value: boolean): void }>()
 
 const documentsStore = useDocumentsStore()
 const { documents, activeDocumentId, loading, user, error } = storeToRefs(documentsStore)
+const mediaSettingsVisible = ref(false)
 
 const formatTime = (value: string) => new Intl.DateTimeFormat('zh-CN', {
   month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
 }).format(new Date(value))
+
+const getMediaSpaceId = (documentId: string) => documentId.slice(0, 8)
+
+const copyMediaSpaceId = async (documentId: string) => {
+  const mediaSpaceId = getMediaSpaceId(documentId)
+  try {
+    await navigator.clipboard.writeText(mediaSpaceId)
+    message.success(`媒体 ID ${mediaSpaceId} 已复制`)
+  }
+  catch {
+    window.prompt('请复制媒体 ID', mediaSpaceId)
+  }
+}
 
 const create = async () => {
   if (await documentsStore.createDocument()) {
@@ -135,6 +165,10 @@ const logout = async () => {
     color: #8a8f99;
     font-size: 12px;
   }
+}
+.manager-header-actions {
+  display: flex;
+  gap: 8px;
 }
 .manager-error {
   margin-top: 12px;
@@ -214,9 +248,27 @@ const logout = async () => {
   }
 }
 .document-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin-top: 6px;
   color: #9096a0;
   font-size: 11px;
+}
+.media-space-id {
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 4px;
+  color: #687386;
+  background: #f0f2f5;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  cursor: copy;
+
+  &:hover {
+    color: $themeColor;
+    background: rgba(65, 105, 225, .1);
+  }
 }
 .document-actions {
   display: flex;

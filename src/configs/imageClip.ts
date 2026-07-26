@@ -1,4 +1,4 @@
-import { PRESENTATION_IMAGE_CLIP_PATHS } from '@pptist/presentation-player'
+import { PRESENTATION_IMAGE_CLIP_PATHS } from 'pptist-presentation-player'
 
 export const enum ClipPathTypes {
   RECT = 'rect',

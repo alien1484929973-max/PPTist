@@ -3,6 +3,7 @@ import { storeToRefs } from 'pinia'
 import { saveAs } from 'file-saver'
 import pptxgen from 'pptxgenjs'
 import tinycolor from 'tinycolor2'
+import { analyzePresentationResources } from 'pptist-presentation-player'
 import { toPng, toJpeg } from 'html-to-image'
 import { useSlidesStore } from '@/store'
 import type { PPTElementOutline, PPTElementShadow, PPTElementLink, Slide } from '@/types/slides'
@@ -12,6 +13,7 @@ import { type SvgPoints, toPoints } from '@/utils/svgPathParser'
 import { encrypt } from '@/utils/crypto'
 import { svg2Base64 } from '@/utils/svg2Base64'
 import message from '@/utils/message'
+import { serializePresentation } from '@/utils/presentation'
 
 import BaseLatexElement from '@/views/components/element/LatexElement/BaseLatexElement.vue'
 import BaseShapeElement from '@/views/components/element/ShapeElement/BaseShapeElement.vue'
@@ -121,11 +123,9 @@ export default () => {
   // 导出pptist文件（特有 .pptist 后缀文件）
   const exportSpecificFile = (_slides: Slide[]) => {
     const json = {
-      title: title.value,
-      width: viewportSize.value,
-      height: viewportSize.value * viewportRatio.value,
-      theme: theme.value,
+      ...serializePresentation(),
       slides: _slides,
+      lastSlideIndex: 0,
     }
     const blob = new Blob([encrypt(JSON.stringify(json))], { type: '' })
     saveAs(blob, `${title.value}.pptist`)
@@ -133,14 +133,14 @@ export default () => {
   
   // 导出JSON文件
   const exportJSON = () => {
-    const json = {
-      title: title.value,
-      width: viewportSize.value,
-      height: viewportSize.value * viewportRatio.value,
-      theme: theme.value,
-      slides: slides.value,
+    const json = serializePresentation()
+    const resources = analyzePresentationResources(json)
+    if (!resources.portable) {
+      const blocking = resources.issues.filter(issue => issue.severity === 'blocking')
+      message.error(`JSON 中有 ${blocking.length} 个不可移植资源，请先上传媒体或改为绝对链接`)
+      return
     }
-    const blob = new Blob([JSON.stringify(json)], { type: '' })
+    const blob = new Blob([JSON.stringify(json)], { type: 'application/json;charset=utf-8' })
     saveAs(blob, `${title.value}.json`)
   }
 
@@ -474,11 +474,8 @@ export default () => {
   }
 
   // 判断是否为SVG图片地址
-  const isSVGImage = (url: string) => {
-    const isSVGBase64 = /^data:image\/svg\+xml;base64,/.test(url)
-    const isSVGUrl = /\.svg$/.test(url)
-    return isSVGBase64 || isSVGUrl
-  }
+  const isSVGBase64Image = (url: string) => /^data:image\/svg\+xml;base64,/i.test(url)
+  const isSVGUrl = (url: string) => /\.svg(?:[?#].*)?$/i.test(url)
 
   // 导出PPTX文件
   const exportPPTX = (_slides: Slide[], masterOverwrite: boolean, ignoreMedia: boolean) => {
@@ -500,9 +497,18 @@ export default () => {
       if (slide.background) {
         const background = slide.background
         if (background.type === 'image' && background.image) {
-          if (isSVGImage(background.image.src)) {
+          if (isSVGBase64Image(background.image.src)) {
             pptxSlide.addImage({
               data: background.image.src,
+              x: 0,
+              y: 0,
+              w: viewportSize.value / ratioPx2Inch.value,
+              h: viewportSize.value * viewportRatio.value / ratioPx2Inch.value,
+            })
+          }
+          else if (isSVGUrl(background.image.src)) {
+            pptxSlide.addImage({
+              path: background.image.src,
               x: 0,
               y: 0,
               w: viewportSize.value / ratioPx2Inch.value,

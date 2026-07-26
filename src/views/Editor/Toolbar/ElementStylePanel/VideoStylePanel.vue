@@ -36,8 +36,10 @@ import type { Ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useMainStore, useSlidesStore } from '@/store'
 import type { PPTVideoElement } from '@/types/slides'
-import { getImageDataURL } from '@/utils/image'
+import { mediaUploadErrorMessage } from '@/services/media'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
+import useMediaUpload from '@/hooks/useMediaUpload'
+import message from '@/utils/message'
 
 import FileInput from '@/components/FileInput.vue'
 import Button from '@/components/Button.vue'
@@ -50,6 +52,7 @@ const { handleElement } = storeToRefs(useMainStore())
 const handleVideoElement = handleElement as Ref<PPTVideoElement>
 
 const { addHistorySnapshot } = useHistorySnapshot()
+const { upload, uploadImage } = useMediaUpload()
 
 const updateVideo = (props: Partial<PPTVideoElement>) => {
   if (!handleElement.value) return
@@ -58,10 +61,16 @@ const updateVideo = (props: Partial<PPTVideoElement>) => {
 }
 
 // 设置视频预览封面
-const setVideoPoster = (files: FileList) => {
+const setVideoPoster = async (files: FileList) => {
   const imageFile = files[0]
   if (!imageFile) return
-  getImageDataURL(imageFile).then(dataURL => updateVideo({ poster: dataURL }))
+  try {
+    const asset = await uploadImage(imageFile)
+    updateVideo({ poster: asset.publicUrl })
+  }
+  catch (error) {
+    message.error(mediaUploadErrorMessage(error))
+  }
 }
 
 // 获取视频首帧作为预览封面
@@ -85,10 +94,18 @@ const setVideoPosterFromFirstFrame = () => {
       canvas.height = video.videoHeight
       ctx!.drawImage(video, 0, 0, canvas.width, canvas.height)
 
-      const poster = canvas.toDataURL('image/jpeg', 0.8)
-      video.remove()
-      canvas.remove()
-      updateVideo({ poster })
+      canvas.toBlob(async blob => {
+        video.remove()
+        canvas.remove()
+        if (!blob) return message.error('无法读取视频首帧')
+        try {
+          const asset = await upload(blob, 'poster', { filename: 'video-poster.jpg' })
+          updateVideo({ poster: asset.publicUrl })
+        }
+        catch (error) {
+          message.error(mediaUploadErrorMessage(error))
+        }
+      }, 'image/jpeg', 0.8)
     })
   }, { once: true })
 

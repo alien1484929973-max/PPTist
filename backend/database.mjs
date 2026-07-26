@@ -42,6 +42,7 @@ export const ensureSchema = async client => {
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       title TEXT NOT NULL,
       content_json JSONB NOT NULL,
+      media_prefix TEXT,
       slide_count INTEGER NOT NULL DEFAULT 1 CHECK (slide_count > 0),
       revision INTEGER NOT NULL DEFAULT 1 CHECK (revision > 0),
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -49,8 +50,21 @@ export const ensureSchema = async client => {
       deleted_at TIMESTAMPTZ
     );
 
+    ALTER TABLE presentations ADD COLUMN IF NOT EXISTS media_prefix TEXT;
+
     CREATE INDEX IF NOT EXISTS idx_presentations_user_updated
       ON presentations(user_id, updated_at DESC)
       WHERE deleted_at IS NULL;
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_presentations_media_prefix
+      ON presentations(media_prefix)
+      WHERE media_prefix IS NOT NULL;
+
+    CREATE TABLE IF NOT EXISTS user_media_credentials (
+      user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      encrypted_api_key TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
   `)
 }

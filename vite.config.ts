@@ -59,7 +59,6 @@ export default defineConfig({
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
       '@pptist/presentation-core': fileURLToPath(new URL('./packages/presentation-core/src', import.meta.url)),
-      '@pptist/presentation-player': fileURLToPath(new URL('./packages/presentation-player/src', import.meta.url)),
     }
   }
 })

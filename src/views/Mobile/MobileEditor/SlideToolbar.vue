@@ -35,7 +35,9 @@ import { storeToRefs } from 'pinia'
 import { useSlidesStore } from '@/store'
 import useSlideHandler from '@/hooks/useSlideHandler'
 import useCreateElement from '@/hooks/useCreateElement'
-import { getImageDataURL } from '@/utils/image'
+import useMediaUpload from '@/hooks/useMediaUpload'
+import { mediaUploadErrorMessage } from '@/services/media'
+import message from '@/utils/message'
 import type { ShapePoolItem } from '@/configs/shapes'
 
 import MobileThumbnails from '../MobileThumbnails.vue'
@@ -48,6 +50,7 @@ const { viewportRatio, currentSlide, viewportSize } = storeToRefs(slidesStore)
 
 const { createSlide, copyAndPasteSlide, deleteSlide, } = useSlideHandler()
 const { createTextElement, createImageElement, createShapeElement } = useCreateElement()
+const { uploadImage } = useMediaUpload()
 
 const insertTextElement = () => {
   const width = 400
@@ -61,9 +64,15 @@ const insertTextElement = () => {
   }, { content: '<p>新添加文本</p>' })
 }
 
-const insertImageElement = (files: FileList) => {
+const insertImageElement = async (files: FileList) => {
   if (!files || !files[0]) return
-  getImageDataURL(files[0]).then(dataURL => createImageElement(dataURL))
+  try {
+    const asset = await uploadImage(files[0])
+    createImageElement(asset.publicUrl)
+  }
+  catch (error) {
+    message.error(mediaUploadErrorMessage(error))
+  }
 }
 
 const insertShapeElement = (type: 'square' | 'round') => {

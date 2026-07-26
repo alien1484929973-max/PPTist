@@ -31,3 +31,30 @@ export const assertPlayerDocument = (input: unknown): PlayerDocument => {
   if (errors.length) throw new TypeError(errors.join(' '))
   return input as PlayerDocument
 }
+
+/** Parse JSON text or validate an already parsed presentation document. */
+export const parsePlayerDocument = (input: unknown): PlayerDocument => {
+  if (typeof input !== 'string') return assertPlayerDocument(input)
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(input)
+  }
+  catch (cause) {
+    const detail = cause instanceof Error ? cause.message : String(cause)
+    throw new SyntaxError(`Invalid presentation JSON: ${detail}`)
+  }
+  return assertPlayerDocument(parsed)
+}
+
+/** Read File, Blob, Response, JSON text, or an already parsed object. */
+export const readPlayerDocument = async (input: unknown): Promise<PlayerDocument> => {
+  if (
+    input &&
+    typeof input === 'object' &&
+    'text' in input &&
+    typeof (input as { text?: unknown }).text === 'function'
+  ) {
+    return parsePlayerDocument(await (input as { text: () => Promise<string> }).text())
+  }
+  return parsePlayerDocument(input)
+}

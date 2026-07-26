@@ -11,7 +11,8 @@ import {
   type PlayerDocument,
   type PlayerState,
   type PresentationPlayer,
-} from '@pptist/presentation-player'
+} from 'pptist-presentation-player'
+import { serializePresentation } from '@/utils/presentation'
 
 const emit = defineEmits<{
   ready: [player: PresentationPlayer | null]
@@ -20,21 +21,14 @@ const emit = defineEmits<{
 }>()
 
 const slidesStore = useSlidesStore()
-const { slides, slideIndex, title, theme, viewportSize, viewportRatio } = storeToRefs(slidesStore)
+const { slides, slideIndex, theme, viewportSize, viewportRatio } = storeToRefs(slidesStore)
 const hostRef = useTemplateRef<HTMLElement>('hostRef')
 let player: PresentationPlayer | null = null
 let failed = false
 
-const presentation = (): PlayerDocument => ({
-  schemaVersion: 2,
-  title: title.value,
-  width: viewportSize.value,
-  height: viewportSize.value * viewportRatio.value,
-  theme: theme.value,
-  // PPTist's editor schema is the source schema accepted by the package.
-  slides: slides.value,
-  lastSlideIndex: slideIndex.value,
-})
+// The editor preview consumes the same serialized schema and installed package
+// entry as an external npm consumer. This prevents source/dist drift.
+const presentation = (): PlayerDocument => serializePresentation()
 
 const reload = () => {
   if (!player || failed) return

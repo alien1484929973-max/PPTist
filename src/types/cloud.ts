@@ -23,3 +23,11 @@ export interface CloudDocument extends CloudDocumentSummary {
 
 export type CloudAuthStatus = 'checking' | 'authenticated' | 'unauthenticated'
 export type CloudSaveStatus = 'idle' | 'dirty' | 'saving' | 'saved' | 'error' | 'conflict'
+
+export interface MediaSettings {
+  configured: boolean
+  maskedKey: string
+  publicBaseUrl: string
+  updatedAt?: string
+  error?: string
+}
