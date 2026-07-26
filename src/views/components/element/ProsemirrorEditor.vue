@@ -239,21 +239,21 @@ const execCommand = ({ target, action }: RichTextCommand) => {
       const result = findNodesWithSameMark(editorView.state.doc, from, to, markType)
       if (result) {
         if (item.value) {
-          const mark = editorView.state.schema.marks.link.create({ href: item.value, title: item.value })
+          const mark = editorView.state.schema.marks.link.create({ href: item.value, title: item.value, origin: 'manual' })
           addMark(editorView, mark, { from: result.from.pos, to: result.to.pos + 1 })
         }
         else editorView.dispatch(editorView.state.tr.removeMark(result.from.pos, result.to.pos + 1, markType))
       }
       else if (markActive(editorView.state, markType)) {
         if (item.value) {
-          const mark = editorView.state.schema.marks.link.create({ href: item.value, title: item.value })
+          const mark = editorView.state.schema.marks.link.create({ href: item.value, title: item.value, origin: 'manual' })
           addMark(editorView, mark)
         }
         else toggleMark(markType)(editorView.state, editorView.dispatch)
       }
       else if (item.value) {
         autoSelectAll(editorView)
-        toggleMark(markType, { href: item.value, title: item.value })(editorView.state, editorView.dispatch)
+        toggleMark(markType, { href: item.value, title: item.value, origin: 'manual' })(editorView.state, editorView.dispatch)
       }
     }
     else if (item.command === 'insert' && item.value) {

@@ -32,6 +32,7 @@ import type {
 } from './types'
 
 const PLAYER_STYLE_ID = 'pptist-presentation-player-styles'
+const INTERACTIVE_SELECTOR = 'a,button,input,select,textarea,[contenteditable="true"],video,audio,.pptist-player-link,[data-pptist-no-advance]'
 const PLAYER_CSS = `
 .pptist-player-host{position:relative;overflow:hidden;isolation:isolate;background:#111;outline:none}
 .pptist-player-viewport{position:absolute;inset:0;overflow:hidden;display:flex;align-items:center;justify-content:center}
@@ -112,6 +113,10 @@ export class DomPresentationPlayer implements PresentationPlayer {
   private ended = false
   private destroyed = false
   private queue: Promise<PlayerState> = Promise.resolve({ slideIndex: 0, stepIndex: 0, slideCount: 0, ended: false })
+  private wheelDelta = 0
+  private wheelDirection = 0
+  private wheelGestureConsumed = false
+  private wheelResetTimer?: number
 
   constructor(private readonly host: HTMLElement, options: PlayerOptions = {}) {
     this.options = options
@@ -131,6 +136,7 @@ export class DomPresentationPlayer implements PresentationPlayer {
     host.appendChild(this.viewport)
 
     this.viewport.addEventListener('pointerdown', this.handlePointerDown)
+    this.viewport.addEventListener('wheel', this.handleWheel, { passive: false })
     this.ownerDocument.addEventListener('keydown', this.handleKeyDown)
     const ResizeObserverClass = this.ownerDocument.defaultView?.ResizeObserver
     if (ResizeObserverClass) {
@@ -224,7 +230,9 @@ export class DomPresentationPlayer implements PresentationPlayer {
     this.clearPlaybackState()
     this.resizeObserver?.disconnect()
     this.viewport.removeEventListener('pointerdown', this.handlePointerDown)
+    this.viewport.removeEventListener('wheel', this.handleWheel)
     this.ownerDocument.removeEventListener('keydown', this.handleKeyDown)
+    if (this.wheelResetTimer !== undefined) this.ownerDocument.defaultView?.clearTimeout(this.wheelResetTimer)
     this.viewport.remove()
     if (this.addedHostClass) this.host.classList.remove('pptist-player-host')
     if (this.options.className) this.host.classList.remove(this.options.className)
@@ -655,17 +663,30 @@ export class DomPresentationPlayer implements PresentationPlayer {
   private readonly handlePointerDown = (event: PointerEvent) => {
     this.host.focus({ preventScroll: true })
     const target = event.target as Element | null
-    const interactive = target?.closest('a,button,input,select,textarea,video,audio,.pptist-player-link,[data-pptist-no-advance]')
+    const interactive = target?.closest(INTERACTIVE_SELECTOR)
     if (this.options.clickToAdvance && event.button === 0 && !interactive) void this.next()
   }
 
   private readonly handleKeyDown = (event: KeyboardEvent) => {
-    if (this.options.keyboard === false || this.ownerDocument.activeElement !== this.host) return
-    if (event.key === 'ArrowRight' || event.key === 'PageDown' || event.key === ' ') {
+    if (this.options.keyboard === false) return
+    const activeElement = this.ownerDocument.activeElement
+    const keyboardScope = this.options.keyboardScope || 'host'
+    if (keyboardScope === 'host' && activeElement !== this.host && !this.host.contains(activeElement)) return
+    const target = event.target as Element | null
+    if (target && target !== this.host && target.closest(INTERACTIVE_SELECTOR)) return
+
+    if (
+      event.key === 'ArrowRight' ||
+      event.key === 'ArrowDown' ||
+      event.key === 'PageDown' ||
+      event.key === 'Enter' ||
+      event.key === ' ' ||
+      event.code === 'Space'
+    ) {
       event.preventDefault()
       void this.next()
     }
-    else if (event.key === 'ArrowLeft' || event.key === 'PageUp') {
+    else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp' || event.key === 'PageUp') {
       event.preventDefault()
       void this.previous()
     }
@@ -677,6 +698,43 @@ export class DomPresentationPlayer implements PresentationPlayer {
       event.preventDefault()
       this.goTo(this.presentation.slides.length - 1)
     }
+  }
+
+  private readonly handleWheel = (event: WheelEvent) => {
+    if (!this.options.wheel || this.destroyed || event.ctrlKey) return
+    const target = event.target as Element | null
+    if (target?.closest(INTERACTIVE_SELECTOR)) return
+
+    const config = typeof this.options.wheel === 'object' ? this.options.wheel : {}
+    const threshold = Math.max(1, config.threshold ?? 36)
+    const idleResetMs = Math.max(50, config.idleResetMs ?? 180)
+    const dominantDelta = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX
+    if (!dominantDelta) return
+    if (config.preventDefault !== false) event.preventDefault()
+
+    const pageSize = Math.max(1, this.host.clientHeight)
+    const normalizedDelta = dominantDelta * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? pageSize : 1)
+    const direction = Math.sign(normalizedDelta)
+    if (direction !== this.wheelDirection) {
+      this.wheelDelta = 0
+      this.wheelGestureConsumed = false
+      this.wheelDirection = direction
+    }
+    this.wheelDelta += normalizedDelta
+
+    if (this.wheelResetTimer !== undefined) this.ownerDocument.defaultView?.clearTimeout(this.wheelResetTimer)
+    this.wheelResetTimer = this.ownerDocument.defaultView?.setTimeout(() => {
+      this.wheelDelta = 0
+      this.wheelDirection = 0
+      this.wheelGestureConsumed = false
+      this.wheelResetTimer = undefined
+    }, idleResetMs)
+
+    if (this.wheelGestureConsumed || Math.abs(this.wheelDelta) < threshold) return
+    this.wheelGestureConsumed = true
+    this.wheelDelta = 0
+    if (direction > 0) void this.next()
+    else void this.previous()
   }
 }
 

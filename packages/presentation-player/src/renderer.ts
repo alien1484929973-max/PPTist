@@ -12,7 +12,11 @@ import type {
 } from './types'
 import { renderPresentationChart, type PlayerChartData, type PlayerChartType } from './chart'
 import tinycolor from 'tinycolor2'
-import { getPresentationLinePath, getPresentationLineRenderPath } from '@pptist/presentation-core'
+import {
+  getPresentationLinePath,
+  getPresentationLineRenderPath,
+  isExplicitPresentationLink,
+} from '@pptist/presentation-core'
 import { resolvePlayerResourceUrl } from './resources'
 import { PRESENTATION_IMAGE_CLIP_PATHS } from './image'
 
@@ -26,6 +30,28 @@ const svgElement = <K extends keyof SVGElementTagNameMap>(
 const shadowStyle = (shadow?: PlayerShadow) => shadow
   ? `${shadow.h}px ${shadow.v}px ${shadow.blur}px ${shadow.color}`
   : ''
+
+const unwrapAnchor = (anchor: HTMLAnchorElement) => {
+  anchor.replaceWith(...Array.from(anchor.childNodes))
+}
+
+const prepareRichTextLinks = (content: HTMLElement, context: ElementRendererContext) => {
+  for (const anchor of content.querySelectorAll<HTMLAnchorElement>('a[href]')) {
+    const rawHref = anchor.getAttribute('href')?.trim() || ''
+    if (!isExplicitPresentationLink(rawHref)) {
+      unwrapAnchor(anchor)
+      continue
+    }
+    const resolvedHref = context.resolveResourceUrl(rawHref, 'link')
+    if (!resolvedHref) {
+      unwrapAnchor(anchor)
+      continue
+    }
+    anchor.setAttribute('href', resolvedHref)
+    if (anchor.target === '_blank') anchor.rel = 'noopener noreferrer'
+    anchor.addEventListener('click', event => event.stopPropagation())
+  }
+}
 
 const outlineStyle = (outline?: PlayerOutline) => {
   if (!outline?.width) return ''
@@ -111,6 +137,7 @@ const renderText = (context: ElementRendererContext) => {
       : element.vAlign === 'bottom' ? 'flex-end' : 'flex-start'
   }
   content.innerHTML = context.sanitizeHtml(element.content || '')
+  prepareRichTextLinks(content, context)
   return content
 }
 
@@ -293,6 +320,7 @@ const renderShape = (context: ElementRendererContext) => {
     text.style.letterSpacing = `${element.text.wordSpace || 0}px`
     text.style.setProperty('--pptist-paragraph-space', `${element.text.paragraphSpace ?? 5}px`)
     text.innerHTML = context.sanitizeHtml(element.text.content)
+    prepareRichTextLinks(text, context)
     wrapper.appendChild(text)
   }
   return wrapper

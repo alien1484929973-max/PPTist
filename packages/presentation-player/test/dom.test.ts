@@ -128,3 +128,95 @@ test('the public player accepts JSON text and resolves linked media from its doc
   player.destroy()
   await window.happyDOM.abort()
 })
+
+test('numeric rich-text fragments are not activated as links', async () => {
+  const { window, host } = installDom()
+  const { createPresentationPlayer } = await import('../src/index')
+  const player = createPresentationPlayer(host, {
+    width: 1000,
+    height: 562.5,
+    slides: [{
+      id: 'one',
+      elements: [{
+        id: 'text',
+        type: 'text',
+        left: 0,
+        top: 0,
+        width: 500,
+        height: 100,
+        content: '<p><a href="1.7">1.7</a> <a href="90.3">3</a> <a href="https://example.test/help" data-pptist-link-origin="manual">帮助</a></p>',
+      }],
+    }],
+  })
+
+  const content = host.querySelector('.pptist-player-text') as HTMLElement
+  assert.equal(content.textContent, '1.7 3 帮助')
+  assert.equal(content.querySelectorAll('a').length, 1)
+  assert.equal(content.querySelector('a')?.getAttribute('href'), 'https://example.test/help')
+  player.destroy()
+  await window.happyDOM.abort()
+})
+
+test('custom renderers can embed host webpage elements and release their resources', async () => {
+  const { window, host } = installDom()
+  const { createPresentationPlayer } = await import('../src/index')
+  let cleanedUp = false
+  const player = createPresentationPlayer(host, {
+    width: 1000,
+    height: 562.5,
+    slides: [{
+      id: 'one',
+      elements: [{
+        id: 'business-widget',
+        type: 'webWidget',
+        left: 100,
+        top: 80,
+        width: 320,
+        height: 180,
+        customData: { widgetTitle: '测试项目按钮' },
+      }],
+    }],
+  }, {
+    renderers: {
+      webWidget({ element, container, onCleanup }) {
+        const button = container.ownerDocument.createElement('button')
+        button.dataset.testWidget = 'ready'
+        button.textContent = String(element.customData?.widgetTitle)
+        onCleanup(() => { cleanedUp = true })
+        return button
+      },
+    },
+  })
+
+  assert.equal(host.querySelector('[data-test-widget="ready"]')?.textContent, '测试项目按钮')
+  player.destroy()
+  assert.equal(cleanedUp, true)
+  await window.happyDOM.abort()
+})
+
+test('document-scoped keyboard and wheel controls advance exactly once per gesture', async () => {
+  const { window, host } = installDom()
+  const { createPresentationPlayer } = await import('../src/index')
+  const slides = ['one', 'two', 'three'].map((id, index) => ({
+    id,
+    elements: [{ id: `text-${id}`, type: 'text', left: 0, top: 0, width: 200, height: 60, content: `<p>${index + 1}</p>` }],
+  }))
+  const player = createPresentationPlayer(host, { width: 1000, height: 562.5, slides }, {
+    keyboard: true,
+    keyboardScope: 'document',
+    wheel: { threshold: 30, idleResetMs: 80 },
+  })
+
+  window.document.body.dispatchEvent(new window.KeyboardEvent('keydown', { key: ' ', code: 'Space', bubbles: true, cancelable: true }))
+  await new Promise(resolve => setTimeout(resolve, 0))
+  assert.equal(player.state.slideIndex, 1)
+
+  const viewport = host.querySelector('.pptist-player-viewport') as HTMLElement
+  viewport.dispatchEvent(new window.WheelEvent('wheel', { deltaY: 50, bubbles: true, cancelable: true }) as unknown as Event)
+  viewport.dispatchEvent(new window.WheelEvent('wheel', { deltaY: 50, bubbles: true, cancelable: true }) as unknown as Event)
+  await new Promise(resolve => setTimeout(resolve, 0))
+  assert.equal(player.state.slideIndex, 2)
+
+  player.destroy()
+  await window.happyDOM.abort()
+})

@@ -170,6 +170,7 @@ const link: MarkSpec = {
     href: {},
     title: { default: null },
     target: { default: '_blank' },
+    origin: { default: null },
   },
   inclusive: false,
   parseDOM: [
@@ -178,11 +179,17 @@ const link: MarkSpec = {
       getAttrs: dom => {
         const href = (dom as HTMLElement).getAttribute('href')
         const title = (dom as HTMLElement).getAttribute('title')
-        return { href, title }
+        const origin = (dom as HTMLElement).dataset.pptistLinkOrigin || null
+        return { href, title, origin }
       }
     },
   ],
-  toDOM: node => ['a', node.attrs, 0],
+  toDOM: node => {
+    const { origin, ...attrs } = node.attrs
+    const domAttrs: Record<string, unknown> = { ...attrs }
+    if (origin) domAttrs['data-pptist-link-origin'] = origin
+    return ['a', domAttrs, 0]
+  },
 }
 
 const mark: MarkSpec = {

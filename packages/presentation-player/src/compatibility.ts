@@ -25,13 +25,13 @@ export const PRESENTATION_PLAYER_COMPATIBILITY: readonly CompatibilityMatrixEntr
   { id: 'charts', feature: '图表', status: 'supported', baseline: 'Chart/ECharts SVG', notes: '内置 bar/column/line/area/pie/ring/radar/scatter；与编辑器共享选项生成器。' },
   { id: 'latex', feature: 'LaTeX', status: 'supported', baseline: 'BaseLatexElement', notes: '按保存的 SVG path 渲染，无需运行时公式引擎。' },
   { id: 'media', feature: '音频和视频', status: 'supported', baseline: 'ScreenVideo/AudioElement', notes: '原生媒体控件、poster、autoplay 与 loop；受浏览器自动播放策略约束。' },
-  { id: 'groups', feature: '组合', status: 'supported', baseline: 'ScreenSlide grouped render', notes: '同 groupId 共享动画目标并保持成员层级。' },
-  { id: 'links', feature: '网页和页内链接', status: 'supported', baseline: 'ScreenElement link', notes: '网页使用 noopener/noreferrer，新页链接按 slide id 跳转。' },
+  { id: 'groups', feature: '组合', status: 'supported', baseline: 'DOM player grouped render', notes: '同 groupId 共享动画目标并保持成员层级。' },
+  { id: 'links', feature: '网页和页内链接', status: 'supported', baseline: 'DOM player element links', notes: '网页使用 noopener/noreferrer，新页链接按 slide id 跳转。' },
   { id: 'scoped-animation', feature: '段落/字符动画', status: 'supported', baseline: 'presentation-core DOM targets', notes: '目标拆分和清理由共享动画核心提供。' },
   { id: 'motion-path', feature: '运动路径', status: 'supported', baseline: 'presentation-core motionPath', notes: '共享 SVG 路径采样、重复、反向和 easing。' },
   { id: 'wipe-and-effects', feature: '擦除及元素动画', status: 'supported', baseline: 'presentation-core effects', notes: '规范化效果和 Web Animations 计划同源；无法映射的旧效果会安全落到最终状态并由审计报告标记。' },
-  { id: 'slide-transitions', feature: '页面切换', status: 'supported', baseline: 'ScreenSlideList turning modes', notes: '支持 no/fade/slideX/slideY/3D/rotate/scale 系列及 PPTX transition 回退映射。' },
-  { id: 'morph', feature: '平滑 Morph', status: 'supported', baseline: 'presentation-core morph', notes: 'Vue 回退和 DOM 播放器共享候选生成、对象匹配及视觉交叉淡化规则。' },
+  { id: 'slide-transitions', feature: '页面切换', status: 'supported', baseline: 'DOM player transition engine', notes: '支持 no/fade/slideX/slideY/3D/rotate/scale 系列及 PPTX transition 回退映射。' },
+  { id: 'morph', feature: '平滑 Morph', status: 'supported', baseline: 'presentation-core morph', notes: 'DOM 播放器使用共享核心的候选生成、对象匹配及视觉交叉淡化规则。' },
   { id: 'sanitize-html', feature: '不可信 HTML 清理', status: 'adapter', baseline: 'PlayerOptions.sanitizeHtml', notes: '宿主必须提供清理函数；默认仅适用于可信编辑器数据。' },
 ] as const
 

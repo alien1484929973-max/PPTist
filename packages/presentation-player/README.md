@@ -120,7 +120,7 @@ createPresentationPlayer(container, document, {
   renderers: {
     privateWidget({ element, container }) {
       const node = container.ownerDocument.createElement('div')
-      node.textContent = String(element.name || '')
+      node.textContent = String(element.customData?.title || '')
       return node
     },
   },

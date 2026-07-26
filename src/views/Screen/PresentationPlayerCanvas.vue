@@ -1,9 +1,14 @@
 <template>
-  <div class="screen-slide-list presentation-player-canvas" ref="hostRef"></div>
+  <div class="screen-slide-list presentation-player-canvas" ref="hostRef">
+    <div class="presentation-player-error" data-pptist-no-advance v-if="errorMessage">
+      <strong>播放器加载失败</strong>
+      <span>{{ errorMessage }}</span>
+    </div>
+  </div>
 </template>
 
 <script lang="ts" setup>
-import { onMounted, onUnmounted, watch, useTemplateRef } from 'vue'
+import { onMounted, onUnmounted, ref, watch, useTemplateRef } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useSlidesStore } from '@/store'
 import {
@@ -20,11 +25,24 @@ const emit = defineEmits<{
   error: [error: Error]
 }>()
 
+const props = withDefaults(defineProps<{
+  keyboard?: boolean
+  keyboardScope?: 'host' | 'document'
+  wheel?: boolean
+  clickToAdvance?: boolean
+}>(), {
+  keyboard: true,
+  keyboardScope: 'document',
+  wheel: true,
+  clickToAdvance: true,
+})
+
 const slidesStore = useSlidesStore()
 const { slides, slideIndex, theme, viewportSize, viewportRatio } = storeToRefs(slidesStore)
 const hostRef = useTemplateRef<HTMLElement>('hostRef')
 let player: PresentationPlayer | null = null
 let failed = false
+const errorMessage = ref('')
 
 // The editor preview consumes the same serialized schema and installed package
 // entry as an external npm consumer. This prevents source/dist drift.
@@ -45,6 +63,7 @@ const reload = () => {
 const fail = (cause: unknown) => {
   if (failed) return
   failed = true
+  errorMessage.value = cause instanceof Error ? cause.message : String(cause)
   player?.destroy()
   player = null
   emit('ready', null)
@@ -57,8 +76,10 @@ onMounted(() => {
     player = createPresentationPlayer(hostRef.value, presentation(), {
       startIndex: slideIndex.value,
       fit: 'contain',
-      keyboard: false,
-      clickToAdvance: false,
+      keyboard: props.keyboard,
+      keyboardScope: props.keyboardScope,
+      wheel: props.wheel,
+      clickToAdvance: props.clickToAdvance,
       showUnsupported: false,
       onStateChange: state => emit('stateChange', state),
     })
@@ -84,5 +105,19 @@ onUnmounted(() => {
   width: 100%;
   height: 100%;
   background: #1d1d1d;
+}
+.presentation-player-error {
+  position: absolute;
+  z-index: 20;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  color: #fecaca;
+  background: #1d1d1d;
+  text-align: center;
 }
 </style>

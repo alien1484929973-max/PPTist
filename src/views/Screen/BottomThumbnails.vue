@@ -22,15 +22,15 @@ import { nextTick, useTemplateRef, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useSlidesStore } from '@/store'
 import useLoadSlides from '@/hooks/useLoadSlides'
-import useExecPlay from './hooks/useExecPlay'
 
 import ThumbnailSlide from '@/views/components/ThumbnailSlide/index.vue'
 
-const { slides, slideIndex, viewportRatio } = storeToRefs(useSlidesStore())
+const slidesStore = useSlidesStore()
+const { slides, slideIndex, viewportRatio } = storeToRefs(slidesStore)
 
 const thumbnailsRef = useTemplateRef<HTMLElement>('thumbnailsRef')
 
-const { turnSlideToIndex } = useExecPlay()
+const turnSlideToIndex = (index: number) => slidesStore.updateSlideIndex(index)
 const { slidesLoadLimit } = useLoadSlides()
 
 const handleMousewheelThumbnails = (e: WheelEvent) => {

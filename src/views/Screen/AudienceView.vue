@@ -1,18 +1,11 @@
 <template>
   <div class="audience-view">
     <PresentationPlayerCanvas
-      v-if="dependencyPlayerEnabled"
+      :keyboard="false"
+      :wheel="false"
+      :clickToAdvance="false"
       @ready="attachPresentationPlayer"
       @stateChange="syncPresentationPlayerState"
-      @error="fallbackToClassicRenderer"
-    />
-    <ScreenSlideList
-      v-else
-      :slideWidth="slideWidth"
-      :slideHeight="slideHeight"
-      :animationIndex="animationIndex"
-      :turnSlideToId="turnSlideToId"
-      :manualExitFullscreen="() => {}"
     />
     <div class="writing-board-overlay" v-if="writingBoardVisible">
       <div
@@ -41,10 +34,8 @@
 import { onMounted, onUnmounted, nextTick, ref } from 'vue'
 import type { Slide } from '@/types/slides'
 import { useSlidesStore } from '@/store'
-import { useDependencyPresentationPlayer } from '@/configs/presentationPlayer'
 import useExecPlay from './hooks/useExecPlay'
 import useSlideSize from './hooks/useSlideSize'
-import ScreenSlideList from './ScreenSlideList.vue'
 import PresentationPlayerCanvas from './PresentationPlayerCanvas.vue'
 
 const slidesStore = useSlidesStore()
@@ -54,14 +45,10 @@ const {
   execPrev,
   turnSlideToIndex,
   turnSlideToId,
-  animationIndex,
-  restoreAnimationState,
+  syncPresentationPlayerCursor,
   attachPresentationPlayer,
   syncPresentationPlayerState,
 } = useExecPlay()
-const dependencyPlayerEnabled = ref(useDependencyPresentationPlayer())
-const fallbackToClassicRenderer = () => dependencyPlayerEnabled.value = false
-
 // 画板覆盖层状态
 const writingBoardVisible = ref(false)
 const writingBoardBlackboard = ref(false)
@@ -85,6 +72,7 @@ onMounted(() => {
       index?: number
       id?: string
       slideIndex?: number
+      stepIndex?: number
       animationIndex?: number
       viewportSize?: number
       viewportRatio?: number
@@ -94,7 +82,10 @@ onMounted(() => {
       x?: number
       y?: number
     }
-    if (msg.type === 'EXEC_NEXT') execNext()
+    if (msg.type === 'PLAYER_STATE' && msg.slideIndex !== undefined && msg.stepIndex !== undefined) {
+      syncPresentationPlayerCursor(msg.slideIndex, msg.stepIndex)
+    }
+    else if (msg.type === 'EXEC_NEXT') execNext()
     else if (msg.type === 'EXEC_PREV') execPrev()
     else if (msg.type === 'TURN_TO_INDEX' && msg.index !== undefined) turnSlideToIndex(msg.index)
     else if (msg.type === 'TURN_TO_ID' && msg.id !== undefined) turnSlideToId(msg.id)
@@ -103,12 +94,8 @@ onMounted(() => {
       if (msg.viewportSize !== undefined) slidesStore.setViewportSize(msg.viewportSize)
       if (msg.viewportRatio !== undefined) slidesStore.setViewportRatio(msg.viewportRatio)
       if (msg.slides) slidesStore.setSlides(msg.slides)
-      turnSlideToIndex(msg.slideIndex)
-      if (msg.animationIndex !== undefined) {
-        animationIndex.value = msg.animationIndex
-        // 等待 DOM 渲染完成后，补齐已执行过的退场动画 CSS 终态
-        nextTick(() => restoreAnimationState(msg.animationIndex!))
-      }
+      // 等待播放器重新加载演讲者的完整文稿，再恢复精确动画游标。
+      nextTick(() => syncPresentationPlayerCursor(msg.slideIndex!, msg.animationIndex ?? 0))
     }
     else if (msg.type === 'WRITING_BOARD_UPDATE') {
       writingBoardVisible.value = true

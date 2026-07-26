@@ -3,7 +3,6 @@ import { useKeyboardStore } from '@/store'
 import { pasteCustomClipboardString } from '@/utils/clipboard'
 import { parseText2Paragraphs } from '@/utils/textParser'
 import { isSVGString, svg2File } from '@/utils/image'
-import { isValidURL } from '@/utils/common'
 import { mediaUploadErrorMessage } from '@/services/media'
 import useCreateElement from '@/hooks/useCreateElement'
 import useAddSlidesOrElements from '@/hooks/useAddSlidesOrElements'
@@ -78,10 +77,6 @@ export default () => {
         // 尝试检查是否为图片地址链接
         if (isValidImgURL(clipboardData)) {
           createImageElement(clipboardData)
-        }
-        // 尝试检查是否为超链接
-        else if (isValidURL(clipboardData)) {
-          createTextElementFromClipboard(`<a href="${clipboardData}" title="${clipboardData}" target="_blank">${clipboardData}</a>`)
         }
         // 尝试检查是否为SVG代码
         else if (isSVGString(clipboardData)) {

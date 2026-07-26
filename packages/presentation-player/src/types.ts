@@ -149,6 +149,8 @@ export interface PlayerElement {
   loop?: boolean
   ext?: string
   fixedRatio?: boolean
+  /** Application-owned serializable payload consumed by a custom renderer. */
+  customData?: Record<string, unknown>
 }
 
 export interface PlayerSlideBackground {
@@ -323,10 +325,23 @@ export interface PlayerState {
   ended: boolean
 }
 
+export interface PlayerWheelOptions {
+  /** Accumulated wheel distance required to advance once. Defaults to 36 pixels. */
+  threshold?: number
+  /** Idle time that separates two wheel gestures. Defaults to 180ms. */
+  idleResetMs?: number
+  /** Prevent the host page from scrolling while the player consumes a gesture. Defaults to true. */
+  preventDefault?: boolean
+}
+
 export interface PlayerOptions {
   /** Scale the fixed PPT canvas inside the host. Defaults to contain. */
   fit?: 'contain' | 'width' | 'none'
   keyboard?: boolean
+  /** Host scope avoids global shortcuts; document scope matches a full-screen presentation. */
+  keyboardScope?: 'host' | 'document'
+  /** Enable one-step-per-gesture wheel navigation. Disabled by default for embedded players. */
+  wheel?: boolean | PlayerWheelOptions
   clickToAdvance?: boolean
   startIndex?: number
   className?: string

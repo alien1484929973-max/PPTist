@@ -62,7 +62,6 @@ declare module 'vue' {
     'IIconParkOutline:edit': typeof import('~icons/icon-park-outline/edit')['default']
     'IIconParkOutline:effects': typeof import('~icons/icon-park-outline/effects')['default']
     'IIconParkOutline:erase': typeof import('~icons/icon-park-outline/erase')['default']
-    'IIconParkOutline:experiment': typeof import('~icons/icon-park-outline/experiment')['default']
     'IIconParkOutline:filePpt': typeof import('~icons/icon-park-outline/file-ppt')['default']
     'IIconParkOutline:fill': typeof import('~icons/icon-park-outline/fill')['default']
     'IIconParkOutline:flipHorizontally': typeof import('~icons/icon-park-outline/flip-horizontally')['default']

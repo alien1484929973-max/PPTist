@@ -1,25 +1,8 @@
 <template>
   <div class="base-view" :class="{ 'laser-pen': laserPen }">
     <PresentationPlayerCanvas
-      v-if="dependencyPlayerEnabled"
       @ready="attachPresentationPlayer"
       @stateChange="syncPresentationPlayerState"
-      @error="fallbackToClassicRenderer"
-      @wheel="($event: WheelEvent) => mousewheelListener($event)"
-      @touchstart="($event: TouchEvent) => touchStartListener($event)"
-      @touchend="($event: TouchEvent) => touchEndListener($event)"
-      v-contextmenu="contextmenus"
-    />
-    <ScreenSlideList
-      v-else
-      :slideWidth="slideWidth"
-      :slideHeight="slideHeight"
-      :animationIndex="animationIndex"
-      :turnSlideToId="turnSlideToId"
-      :manualExitFullscreen="manualExitFullscreen"
-      @wheel="($event: WheelEvent) => mousewheelListener($event)"
-      @touchstart="($event: TouchEvent) => touchStartListener($event)"
-      @touchend="($event: TouchEvent) => touchEndListener($event)"
       v-contextmenu="contextmenus"
     />
 
@@ -74,13 +57,12 @@ import { storeToRefs } from 'pinia'
 import { useSlidesStore } from '@/store'
 import type { ContextmenuItem } from '@/components/Contextmenu/types'
 import { enterFullscreen } from '@/utils/fullscreen'
-import { audienceViewUrl, useDependencyPresentationPlayer } from '@/configs/presentationPlayer'
+import { audienceViewUrl } from '@/configs/presentationPlayer'
 import useScreening from '@/hooks/useScreening'
 import useExecPlay from './hooks/useExecPlay'
 import useSlideSize from './hooks/useSlideSize'
 import useFullscreen from './hooks/useFullscreen'
 
-import ScreenSlideList from './ScreenSlideList.vue'
 import PresentationPlayerCanvas from './PresentationPlayerCanvas.vue'
 import SlideThumbnails from './SlideThumbnails.vue'
 import WritingBoardTool from './WritingBoardTool.vue'
@@ -101,24 +83,16 @@ const {
   setAutoPlayInterval,
   loopPlay,
   setLoopPlay,
-  mousewheelListener,
-  touchStartListener,
-  touchEndListener,
   turnPrevSlide,
   turnNextSlide,
   turnSlideToIndex,
-  turnSlideToId,
   execPrev,
   execNext,
-  animationIndex,
   laserPen,
   broadcastExit,
   attachPresentationPlayer,
   syncPresentationPlayerState,
 } = useExecPlay()
-
-const dependencyPlayerEnabled = ref(useDependencyPresentationPlayer())
-const fallbackToClassicRenderer = () => dependencyPlayerEnabled.value = false
 
 const { slideWidth, slideHeight } = useSlideSize()
 const { exitScreening: _exitScreening } = useScreening()

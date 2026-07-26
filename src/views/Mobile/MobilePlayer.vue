@@ -7,52 +7,15 @@
     }"
   >
     <PresentationPlayerCanvas
-      v-if="dependencyPlayerEnabled"
+      :keyboard="false"
+      :wheel="false"
+      :clickToAdvance="false"
       @ready="attachPresentationPlayer"
       @stateChange="syncPresentationPlayerState"
-      @error="fallbackToClassicRenderer"
       @click="toolVisible = !toolVisible"
       @touchstart="($event: TouchEvent) => touchStartListener($event)"
       @touchend="($event: TouchEvent) => touchEndListener($event)"
     />
-    <div
-      v-else
-      class="screen-slide-list" 
-      @click="toolVisible = !toolVisible"
-      @touchstart="$event => touchStartListener($event)"
-      @touchend="$event => touchEndListener($event)"
-    >
-      <div 
-        :class="[
-          'slide-item', 
-          `turning-mode-${slide.turningMode || 'slideY'}`,
-          {
-            'current': index === slideIndex,
-            'before': index < slideIndex,
-            'after': index > slideIndex,
-            'hide': (index === slideIndex - 1 || index === slideIndex + 1) && slide.turningMode !== slidesWithTurningMode[slideIndex].turningMode,
-            'last': index === slideIndex - 1,
-            'next': index === slideIndex + 1,
-          }
-        ]"
-        v-for="(slide, index) in slidesWithTurningMode" 
-        :key="slide.id"
-      >
-        <div 
-          class="slide-content" 
-          :style="{
-            width: slideSize.width + 'px',
-            height: slideSize.height + 'px',
-          }"
-          v-if="Math.abs(slideIndex - index) < 2"
-        >
-          <ThumbnailSlide 
-            :slide="slide" 
-            :size="slideSize.width" 
-          />
-        </div>
-      </div>
-    </div>
 
     <template v-if="toolVisible">
       <div class="header">
@@ -64,15 +27,12 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, ref, shallowRef, watch } from 'vue'
+import { onMounted, ref, shallowRef, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useSlidesStore } from '@/store'
 import type { Mode } from '@/types/mobile'
-import { useDependencyPresentationPlayer } from '@/configs/presentationPlayer'
 import type { PlayerState, PresentationPlayer } from 'pptist-presentation-player'
-import useSlidesWithTurningMode from '../Screen/hooks/useSlidesWithTurningMode'
 
-import ThumbnailSlide from '@/views/components/ThumbnailSlide/index.vue'
 import MobileThumbnails from './MobileThumbnails.vue'
 import PresentationPlayerCanvas from '../Screen/PresentationPlayerCanvas.vue'
 
@@ -81,13 +41,9 @@ defineProps<{
 }>()
 
 const slidesStore = useSlidesStore()
-const { slides, slideIndex, viewportRatio } = storeToRefs(slidesStore)
-
-const { slidesWithTurningMode } = useSlidesWithTurningMode()
+const { slideIndex } = storeToRefs(slidesStore)
 
 const toolVisible = ref(false)
-const dependencyPlayerEnabled = ref(useDependencyPresentationPlayer())
-const fallbackToClassicRenderer = () => dependencyPlayerEnabled.value = false
 const dependencyPlayer = shallowRef<PresentationPlayer | null>(null)
 
 const attachPresentationPlayer = (player: PresentationPlayer | null) => {
@@ -110,27 +66,6 @@ onMounted(() => {
   }
 })
 
-const slideSize = computed(() => {
-  const playerRatio = playerSize.value.height / playerSize.value.width
-
-  let slideWidth = 0
-  let slideHeight = 0
-
-  if (playerRatio >= viewportRatio.value) {
-    slideWidth = playerSize.value.width
-    slideHeight = slideWidth * viewportRatio.value
-  }
-  else {
-    slideHeight = playerSize.value.height
-    slideWidth = slideHeight / viewportRatio.value
-  }
-
-  return {
-    width: slideWidth,
-    height: slideHeight,
-  }
-})
-
 const touchInfo = ref<{ x: number; y: number; } | null>(null)
 const touchStartListener = (e: TouchEvent) => {
   touchInfo.value = {
@@ -147,23 +82,13 @@ const touchEndListener = (e: TouchEvent) => {
   const offsetAbsY = Math.abs(offsetY)
 
   if ( offsetAbsX > offsetAbsY && offsetAbsX > 50 ) {
-    if (dependencyPlayer.value) {
-      if (offsetX < 0) void dependencyPlayer.value.previous()
-      if (offsetX > 0) void dependencyPlayer.value.next()
-      return
-    }
-    if (offsetX < 0 && slideIndex.value > 0) slidesStore.updateSlideIndex(slideIndex.value - 1)
-    if (offsetX > 0 && slideIndex.value < slides.value.length - 1) slidesStore.updateSlideIndex(slideIndex.value + 1)
+    if (offsetX < 0) void dependencyPlayer.value?.previous()
+    if (offsetX > 0) void dependencyPlayer.value?.next()
   }
 
   if ( offsetAbsY > offsetAbsX && offsetAbsY > 50 ) {
-    if (dependencyPlayer.value) {
-      if (offsetY > 0) void dependencyPlayer.value.previous()
-      if (offsetY < 0) void dependencyPlayer.value.next()
-      return
-    }
-    if (offsetY > 0 && slideIndex.value > 0) slidesStore.updateSlideIndex(slideIndex.value - 1)
-    if (offsetY < 0 && slideIndex.value < slides.value.length - 1) slidesStore.updateSlideIndex(slideIndex.value + 1)
+    if (offsetY > 0) void dependencyPlayer.value?.previous()
+    if (offsetY < 0) void dependencyPlayer.value?.next()
   }
 }
 
