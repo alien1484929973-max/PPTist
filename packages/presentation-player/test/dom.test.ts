@@ -98,6 +98,82 @@ test('standalone navigation completes slide transitions and Morph', async () => 
   await window.happyDOM.abort()
 })
 
+test('Morph keeps the target shape path and cleans segmented text after playback', async () => {
+  const { window, host } = installDom()
+  const { createPresentationPlayer } = await import('../src/index')
+  const player = createPresentationPlayer(host, {
+    width: 1000,
+    height: 562.5,
+    slides: [
+      {
+        id: 'one',
+        elements: [
+          { id: 'shape-one', morphKey: 'shape', type: 'shape', left: 10, top: 10, width: 100, height: 100, rotate: 0, viewBox: [100, 100], path: 'M0 0L100 0L100 100Z', fill: '#f00' },
+          { id: 'text-one', morphKey: 'text', type: 'text', left: 150, top: 10, width: 220, height: 80, rotate: 0, content: '<p>文字</p>', defaultColor: '#f00' },
+        ],
+      },
+      {
+        id: 'two',
+        transition: { type: 'morph', duration: 20, morph: { mode: 'byChar' } },
+        elements: [
+          { id: 'shape-two', morphKey: 'shape', type: 'shape', left: 30, top: 30, width: 140, height: 90, rotate: 0, viewBox: [100, 100], path: 'M0 10L90 0L100 100Z', fill: '#00f' },
+          { id: 'text-two', morphKey: 'text', type: 'text', left: 180, top: 30, width: 240, height: 80, rotate: 0, content: '<p>文字增加</p>', defaultColor: '#00f' },
+        ],
+      },
+    ],
+  })
+
+  await player.next()
+  assert.equal(host.querySelector('.pptist-player-element svg path')?.getAttribute('d'), 'M0 10L90 0L100 100Z')
+  assert.equal(host.querySelector('.pptist-player-text')?.textContent, '文字增加')
+  assert.equal(host.querySelector('[data-pptist-morph-segment]'), null)
+  player.destroy()
+  await window.happyDOM.abort()
+})
+
+test('first slide animation follows the slide-transition start rule', async () => {
+  const { window, host } = installDom()
+  const { createPresentationPlayer } = await import('../src/index')
+  const fadeIn = (id: string, elementId: string, trigger: 'click' | 'withPrevious' | 'afterPrevious') => ({
+    id,
+    target: { elementId },
+    timing: { duration: 1, delay: 0, trigger },
+    effect: { class: 'entrance' as const, canonical: { kind: 'fade' as const, phase: 'entrance' as const } },
+  })
+  const player = createPresentationPlayer(host, {
+    width: 1000,
+    height: 562.5,
+    slides: [
+      { id: 'one', elements: [] },
+      {
+        id: 'two',
+        transition: { type: 'fade', duration: 1 },
+        animationTimeline: {
+          version: 1,
+          animations: [
+            fadeIn('automatic', 'automatic-element', 'withPrevious'),
+            fadeIn('clicked', 'clicked-element', 'click'),
+          ],
+        },
+        elements: [
+          { id: 'automatic-element', type: 'text', left: 10, top: 10, width: 200, height: 60, rotate: 0, content: '<p>Automatic</p>' },
+          { id: 'clicked-element', type: 'text', left: 10, top: 90, width: 200, height: 60, rotate: 0, content: '<p>Clicked</p>' },
+        ],
+      },
+    ],
+  })
+
+  await player.next()
+  assert.equal(player.state.slideIndex, 1)
+  assert.equal(player.state.stepIndex, 1)
+  assert.equal((host.querySelector('[data-pptist-element-id="automatic-element"]') as HTMLElement).style.visibility, 'visible')
+  assert.equal((host.querySelector('[data-pptist-element-id="clicked-element"]') as HTMLElement).style.visibility, 'hidden')
+  await player.next()
+  assert.equal(player.state.stepIndex, 2)
+  player.destroy()
+  await window.happyDOM.abort()
+})
+
 test('the public player accepts JSON text and resolves linked media from its document base', async () => {
   const { window, host } = installDom()
   const { createPresentationPlayer } = await import('../src/index')
@@ -182,7 +258,9 @@ test('custom renderers can embed host webpage elements and release their resourc
         const button = container.ownerDocument.createElement('button')
         button.dataset.testWidget = 'ready'
         button.textContent = String(element.customData?.widgetTitle)
-        onCleanup(() => { cleanedUp = true })
+        onCleanup(() => {
+          cleanedUp = true
+        })
         return button
       },
     },
@@ -217,6 +295,132 @@ test('document-scoped keyboard and wheel controls advance exactly once per gestu
   await new Promise(resolve => setTimeout(resolve, 0))
   assert.equal(player.state.slideIndex, 2)
 
+  player.destroy()
+  await window.happyDOM.abort()
+})
+
+test('unchanged Morph objects do not receive no-op compositor animations', async () => {
+  const { window, host } = installDom()
+  const animatedNodes: HTMLElement[] = []
+  Object.defineProperty(window.HTMLElement.prototype, 'animate', {
+    configurable: true,
+    value(this: HTMLElement) {
+      animatedNodes.push(this)
+      return { finished: Promise.resolve(), cancel() {} } as unknown as Animation
+    },
+  })
+  const { createPresentationPlayer } = await import('../src/index')
+  const element = (id: string) => ({
+    id,
+    morphKey: 'static-title',
+    type: 'text',
+    left: 120,
+    top: 80,
+    width: 320,
+    height: 60,
+    rotate: 0,
+    content: '<p>保持不变</p>',
+    defaultColor: '#222222',
+  })
+  const player = createPresentationPlayer(host, {
+    width: 1000,
+    height: 562.5,
+    slides: [
+      { id: 'one', elements: [element('from-title')] },
+      {
+        id: 'two',
+        transition: { type: 'morph', duration: 1, morph: { mode: 'byObject' } },
+        elements: [element('to-title')],
+      },
+    ],
+  })
+
+  await player.next()
+  assert.equal(player.state.slideIndex, 1)
+  assert.equal(animatedNodes.some(node => !!node.closest('[data-pptist-element-id="to-title"]')), false)
+  player.destroy()
+  await window.happyDOM.abort()
+})
+
+test('wheel navigation finishes one animation step at a time without skipping the slide', async () => {
+  const { window, host } = installDom()
+  Object.defineProperty(window.HTMLElement.prototype, 'animate', {
+    configurable: true,
+    value() {
+      let finish!: () => void
+      const finished = new Promise<void>(resolve => {
+        finish = resolve
+      })
+      return { finished, cancel: finish } as unknown as Animation
+    },
+  })
+  const { createPresentationPlayer } = await import('../src/index')
+  const player = createPresentationPlayer(host, {
+    width: 1000,
+    height: 562.5,
+    slides: [
+      { id: 'one', elements: [{ id: 'one-text', type: 'text', left: 0, top: 0, width: 200, height: 60, content: '<p>1</p>' }] },
+      {
+        id: 'two',
+        transition: { type: 'fade', duration: 5000 },
+        animationTimeline: {
+          version: 1,
+          animations: [
+            {
+              id: 'two-first-entrance',
+              target: { elementId: 'two-first' },
+              timing: { duration: 1000, delay: 0, trigger: 'click' },
+              effect: { class: 'entrance', canonical: { kind: 'fade', phase: 'entrance' } },
+            },
+            {
+              id: 'two-second-entrance',
+              target: { elementId: 'two-second' },
+              timing: { duration: 1000, delay: 0, trigger: 'click' },
+              effect: { class: 'entrance', canonical: { kind: 'fade', phase: 'entrance' } },
+            },
+          ],
+        },
+        elements: [
+          { id: 'two-first', type: 'text', left: 0, top: 0, width: 200, height: 60, content: '<p>2A</p>' },
+          { id: 'two-second', type: 'text', left: 0, top: 80, width: 200, height: 60, content: '<p>2B</p>' },
+        ],
+      },
+      {
+        id: 'three',
+        elements: [{ id: 'three-text', type: 'text', left: 0, top: 0, width: 200, height: 60, content: '<p>3</p>' }],
+      },
+    ],
+  }, { wheel: { threshold: 1, idleResetMs: 50 } })
+
+  const pendingTransition = player.next()
+  await new Promise(resolve => setTimeout(resolve, 0))
+  assert.equal(player.state.slideIndex, 1)
+
+  const viewport = host.querySelector('.pptist-player-viewport') as HTMLElement
+  viewport.dispatchEvent(new window.WheelEvent('wheel', { deltaY: 10, bubbles: true, cancelable: true }) as unknown as Event)
+  assert.equal(player.state.slideIndex, 1)
+  assert.equal(player.state.stepIndex, 0)
+  assert.equal((host.querySelector('[data-pptist-element-id="two-first"]') as HTMLElement).style.visibility, 'hidden')
+  assert.equal((host.querySelector('[data-pptist-element-id="two-second"]') as HTMLElement).style.visibility, 'hidden')
+
+  await pendingTransition
+  await new Promise(resolve => setTimeout(resolve, 60))
+  viewport.dispatchEvent(new window.WheelEvent('wheel', { deltaY: 10, bubbles: true, cancelable: true }) as unknown as Event)
+  assert.equal(player.state.slideIndex, 1)
+  assert.equal(player.state.stepIndex, 1)
+  assert.equal((host.querySelector('[data-pptist-element-id="two-first"]') as HTMLElement).style.visibility, 'visible')
+  assert.equal((host.querySelector('[data-pptist-element-id="two-second"]') as HTMLElement).style.visibility, 'hidden')
+
+  await new Promise(resolve => setTimeout(resolve, 60))
+  viewport.dispatchEvent(new window.WheelEvent('wheel', { deltaY: 10, bubbles: true, cancelable: true }) as unknown as Event)
+  assert.equal(player.state.slideIndex, 1)
+  assert.equal(player.state.stepIndex, 2)
+  assert.equal((host.querySelector('[data-pptist-element-id="two-second"]') as HTMLElement).style.visibility, 'visible')
+
+  await new Promise(resolve => setTimeout(resolve, 60))
+  viewport.dispatchEvent(new window.WheelEvent('wheel', { deltaY: 10, bubbles: true, cancelable: true }) as unknown as Event)
+  assert.equal(player.state.slideIndex, 2)
+  assert.equal(host.querySelector('.pptist-player-text')?.textContent, '3')
   player.destroy()
   await window.happyDOM.abort()
 })

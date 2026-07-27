@@ -43,9 +43,137 @@
 
     <div class="tip" v-else><i-icon-park-outline:click style="margin-right: 5px;" /> 选中画布中的元素添加动画</div>
     
-    <Divider />
+    <Divider :margin="8" />
 
-    <div class="pane-title">动画窗格</div>
+    <div class="pane-toolbar">
+      <div class="sequence-title">
+        <span>顺序</span>
+        <span class="sequence-count">{{ animationSequence.length }}</span>
+      </div>
+      <Button size="small" @click="runAllAnimation()" :disabled="!animationSequence.length">
+        <i-icon-park-outline:pause v-if="animateIn" />
+        <i-icon-park-outline:play-one v-else />
+        {{ animateIn ? '停止' : '播放' }}
+      </Button>
+    </div>
+
+    <div class="selected-animation-editor" v-if="selectedAnimation">
+      <div class="selected-animation-heading">
+        <div class="selected-animation-name">
+          <span :class="['effect-dot', selectedAnimation.type]"></span>
+          {{ selectedAnimation.elementLabel }}
+        </div>
+        <div class="selected-animation-actions">
+          <Popover
+            trigger="click"
+            placement="bottom-end"
+            v-model:value="advancedTimingVisible"
+            :contentStyle="{ width: '224px' }"
+          >
+            <template #content>
+              <div class="advanced-timing-title">高级设置</div>
+              <div class="property-row">
+                <div class="property-label">持续时间</div>
+                <NumberInput
+                  :min="100"
+                  :max="10000"
+                  :step="100"
+                  :value="selectedAnimation.duration"
+                  @update:value="value => updateElementAnimationDuration(activeAnimationId, value)"
+                ><template #suffix>毫秒</template></NumberInput>
+              </div>
+              <div class="property-row">
+                <div class="property-label">延迟</div>
+                <NumberInput
+                  :min="0"
+                  :max="10000"
+                  :step="100"
+                  :value="selectedAnimation.delay || 0"
+                  @update:value="value => updateElementAnimationDelay(activeAnimationId, value)"
+                ><template #suffix>毫秒</template></NumberInput>
+              </div>
+              <div class="property-row">
+                <div class="property-label">重复</div>
+                <Select
+                  :value="selectedAnimation.repeatCount || 1"
+                  @update:value="value => updateElementAnimationRepeat(activeAnimationId, Number(value))"
+                  :options="[
+                    { label: '无', value: 1 },
+                    { label: '2 次', value: 2 },
+                    { label: '3 次', value: 3 },
+                    { label: '5 次', value: 5 },
+                    { label: '10 次', value: 10 },
+                  ]"
+                />
+              </div>
+              <div class="property-row">
+                <div class="property-label" v-tooltip="'控制动画开始、途中和结束时的加速方式'">速度曲线</div>
+                <Select
+                  :value="selectedAnimation.easing || 'ease'"
+                  @update:value="value => updateElementAnimationEasing(activeAnimationId, String(value))"
+                  :options="[
+                    { label: '平滑', value: 'ease' },
+                    { label: '匀速', value: 'linear' },
+                    { label: '平滑开始', value: 'ease-in' },
+                    { label: '平滑结束', value: 'ease-out' },
+                    { label: '平滑开始和结束', value: 'ease-in-out' },
+                  ]"
+                />
+              </div>
+              <div class="auto-reverse-row">
+                <span v-tooltip="'到达终点后沿相反方向播放一次'">自动翻转</span>
+                <Switch
+                  :value="!!selectedAnimation.autoReverse"
+                  @update:value="value => updateElementAnimationAutoReverse(activeAnimationId, value)"
+                />
+              </div>
+            </template>
+            <button class="advanced-settings-trigger" type="button" v-tooltip="'高级设置'">
+              <i-icon-park-outline:setting-two />
+            </button>
+          </Popover>
+        </div>
+      </div>
+
+      <div class="property-row">
+        <div class="property-label">效果</div>
+        <Button class="effect-button" @click="openAnimationPool(selectedAnimation.id)">
+          {{ selectedAnimation.animationEffect }}
+          <span v-if="selectedAnimation.directionLabel"> · {{ selectedAnimation.directionLabel }}</span>
+          <i-icon-park-outline:down />
+        </Button>
+      </div>
+      <div class="property-row" v-if="getAnimationDirectionOptions(selectedAnimation).length">
+        <div class="property-label">效果属性</div>
+        <Select
+          :value="getAnimationDirection(selectedAnimation) || ''"
+          @update:value="value => updateElementAnimationDirection(activeAnimationId, value as AnimationDirection)"
+          :options="getAnimationDirectionOptions(selectedAnimation)"
+        />
+      </div>
+      <div class="quick-settings-grid">
+        <div class="quick-setting">
+          <div class="quick-setting-label">开始</div>
+          <Select
+            :value="selectedAnimation.trigger"
+            @update:value="value => updateElementAnimationTrigger(activeAnimationId, value as AnimationTrigger)"
+            :options="animationStartOptions"
+          />
+        </div>
+        <div class="quick-setting">
+          <div class="quick-setting-label">速度</div>
+          <Select
+            :value="selectedAnimation.duration"
+            defaultLabel="自定义"
+            @update:value="value => updateElementAnimationDuration(activeAnimationId, Number(value))"
+            :options="speedOptions"
+          />
+        </div>
+      </div>
+    </div>
+    <div class="selected-animation-empty" v-else>
+      选择下方动画即可编辑
+    </div>
 
     <Draggable 
       class="animation-sequence"
@@ -63,137 +191,22 @@
             class="sequence-content"
             role="button"
             tabindex="0"
-            :aria-expanded="activeAnimationId === element.id"
             @click="selectAnimation(element)"
             @keydown.enter.space.prevent="selectAnimation(element)"
           >
-            <div class="index">{{element.index}}</div>
-            <div class="text">
-              「{{element.elType}}」{{element.animationEffect}}
-              <span class="direction" v-if="element.targetLabel"> · {{element.targetLabel}}</span>
-              <span class="direction" v-if="element.directionLabel"> · {{element.directionLabel}}</span>
+            <div class="index" :class="{ simultaneous: element.index === '' }">{{ element.index || '•' }}</div>
+            <span :class="['effect-bar', element.type]"></span>
+            <div class="text-block">
+              <div class="object-name">{{ element.elementLabel }}</div>
             </div>
             <div class="handler">
               <i-icon-park-outline:play-one class="handler-btn" v-tooltip="'预览'" @click.stop="previewAnimation(element)" />
               <i-icon-park-outline:close-small class="handler-btn" v-tooltip="'删除'" @click.stop="deleteAnimation(element.id)" />
-              <i-icon-park-outline:down class="expand-icon" v-if="activeAnimationId === element.id" />
-              <i-icon-park-outline:right class="expand-icon" v-else />
-            </div>
-          </div>
-
-          <div class="configs-collapse" :class="{ 'expanded': activeAnimationId === element.id }">
-            <div class="configs">
-              <Divider :margin="10" />
-
-              <div class="primary-config-row">
-                <div class="compact-config-item" v-if="getAnimationDirectionOptions(element).length">
-                  <div class="compact-config-label">效果选项</div>
-                  <Select
-                    :value="getAnimationDirection(element) || ''"
-                    @update:value="value => updateElementAnimationDirection(element.id, value as AnimationDirection)"
-                    :options="getAnimationDirectionOptions(element)"
-                  />
-                </div>
-                <div class="compact-config-item" :class="{ 'single': !getAnimationDirectionOptions(element).length }">
-                  <div class="compact-config-label">开始</div>
-                  <Select
-                    :value="element.trigger"
-                    @update:value="value => updateElementAnimationTrigger(element.id, value as AnimationTrigger)"
-                    :options="[
-                      { label: '单击时', value: 'click' },
-                      { label: '与上一动画同时', value: 'meantime' },
-                      { label: '上一动画之后', value: 'auto' },
-                    ]"
-                  />
-                </div>
-              </div>
-              <div class="config-item change-animation">
-                <Button size="small" style="width: 100%;" @click="openAnimationPool(element.id)"><i-icon-park-outline:switch /> 更换动画</Button>
-              </div>
-              <div class="advanced-settings-toggle" @click.stop="toggleAdvancedSettings(element.id)">
-                <span>高级设置</span>
-                <i-icon-park-outline:down v-if="advancedAnimationId === element.id" />
-                <i-icon-park-outline:right v-else />
-              </div>
-              <div class="advanced-settings" v-if="advancedAnimationId === element.id">
-                <div class="config-item">
-                  <div style="width: 35%;">持续时长：</div>
-                  <NumberInput
-                    :min="100"
-                    :max="10000"
-                    :step="100"
-                    :value="element.duration"
-                    @update:value="value => updateElementAnimationDuration(element.id, value)"
-                    style="width: 65%;"
-                  />
-                </div>
-                <div class="config-item">
-                  <div style="width: 35%;">延迟：</div>
-                  <NumberInput
-                    :min="0"
-                    :max="10000"
-                    :step="100"
-                    :value="element.delay || 0"
-                    @update:value="value => updateElementAnimationDelay(element.id, value)"
-                    style="width: 65%;"
-                  />
-                </div>
-                <div class="config-item">
-                  <div style="width: 35%;">重复：</div>
-                  <Select
-                    :value="element.repeatCount || 1"
-                    @update:value="value => updateElementAnimationRepeat(element.id, Number(value))"
-                    style="width: 65%;"
-                    :options="[
-                      { label: '无', value: 1 },
-                      { label: '2 次', value: 2 },
-                      { label: '3 次', value: 3 },
-                      { label: '5 次', value: 5 },
-                      { label: '10 次', value: 10 },
-                    ]"
-                  />
-                </div>
-                <div class="config-item">
-                  <div
-                    style="width: 35%;"
-                    v-tooltip="'控制动画在开始、途中和结束时如何加速或减速'"
-                  >速度曲线：</div>
-                  <Select
-                    :value="element.easing || 'ease'"
-                    @update:value="value => updateElementAnimationEasing(element.id, String(value))"
-                    style="width: 65%;"
-                    :options="[
-                      { label: '平滑', value: 'ease' },
-                      { label: '匀速', value: 'linear' },
-                      { label: '平滑开始', value: 'ease-in' },
-                      { label: '平滑结束', value: 'ease-out' },
-                      { label: '平滑开始和结束', value: 'ease-in-out' },
-                    ]"
-                  />
-                </div>
-                <div class="config-item">
-                  <div
-                    style="width: 35%;"
-                    v-tooltip="'到达终点后沿相反方向播放一次，回到起始状态'"
-                  >自动翻转：</div>
-                  <Switch
-                    :value="!!element.autoReverse"
-                    @update:value="value => updateElementAnimationAutoReverse(element.id, value)"
-                  />
-                </div>
-              </div>
             </div>
           </div>
         </div>
       </template>
     </Draggable>
-
-    <template v-if="animationSequence.length >= 2">
-      <Divider />
-      <Button @click="runAllAnimation()">
-        <i-icon-park-outline:pause v-if="animateIn" /><i-icon-park-outline:play-one v-else /> {{ animateIn ? '停止预览' : '预览全部'}}
-      </Button>
-    </template>
   </div>
 </template>
 
@@ -210,7 +223,7 @@ import {
   type TimelineTrigger,
 } from '@pptist/presentation-core'
 import { useMainStore, useSlidesStore } from '@/store'
-import type { AnimationTrigger, AnimationType, PPTAnimation } from '@/types/slides'
+import type { AnimationTrigger, AnimationType, PPTAnimation, PPTElement } from '@/types/slides'
 import {
   ENTER_ANIMATIONS,
   EXIT_ANIMATIONS,
@@ -225,6 +238,7 @@ import {
 import { ELEMENT_TYPE_ZH } from '@/configs/element'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 import useSelectElement from '@/hooks/useSelectElement'
+import { elementObjectName, groupObjectName } from '@/utils/elementObjectName'
 import { runElementAnimation, type ElementAnimationHandle } from '@/utils/elementAnimation'
 
 import Tabs from '@/components/Tabs.vue'
@@ -247,9 +261,11 @@ type EditableAnimationType = Exclude<AnimationType, 'motion'>
 interface SequenceAnimation extends PPTAnimation {
   index: number | ''
   elType: string
+  elementLabel: string
   animationEffect: string
   targetLabel: string
   directionLabel: string
+  triggerLabel: string
 }
 
 const animationTypes: EditableAnimationType[] = ['in', 'out', 'attention']
@@ -275,7 +291,15 @@ const animateIn = ref(false)
 const animationPoolVisible = ref(false)
 const activeAnimationId = ref('')
 const handleAnimationId = ref('')
-const advancedAnimationId = ref('')
+const advancedTimingVisible = ref(false)
+
+const speedOptions = [
+  { label: '非常快 0.25秒', value: 250 },
+  { label: '快速 0.5秒', value: 500 },
+  { label: '中速 1秒', value: 1000 },
+  { label: '慢速 2秒', value: 2000 },
+  { label: '非常慢 3秒', value: 3000 },
+]
 
 const batchTargetIds = computed(() => {
   if (activeGroupElementId.value || activeElementList.value.length <= 1) return []
@@ -299,15 +323,15 @@ const selectedTargetsContainGroup = (groupId: string) => {
     memberIds.every(id => animationTargetIds.value.includes(id))
 }
 
-watch(animationTargetKey, () => {
+watch([animationTargetKey, () => currentSlide.value.id], () => {
   animationPoolVisible.value = false
-  advancedAnimationId.value = ''
+  advancedTimingVisible.value = false
   const active = currentSlideAnimations.value.find(animation => animation.id === activeAnimationId.value)
   if (active && (
     animationTargetIds.value.includes(active.elId) ||
     (active.target?.groupId && selectedTargetsContainGroup(active.target.groupId))
   )) return
-  activeAnimationId.value = currentSlideAnimations.value.find(animation => animationTargetIds.value.includes(animation.elId))?.id || ''
+  activeAnimationId.value = currentSlideAnimations.value.find(animation => animationTargetIds.value.includes(animation.elId))?.id || currentSlideAnimations.value[0]?.id || ''
 }, { immediate: true })
 
 const timelineTrigger = (trigger: AnimationTrigger): TimelineTrigger => {
@@ -382,39 +406,61 @@ const commitAnimations = (animations: PPTAnimation[]) => {
   })
 }
 
+const elementDisplayLabel = (element: PPTElement | undefined, groupId?: string) => {
+  if (groupId) return groupObjectName(groupId, currentSlide.value.elements)
+  if (!element) return '未知对象'
+  return elementObjectName(element, currentSlide.value.elements)
+}
+
 const animationSequence = computed<SequenceAnimation[]>(() => {
   const sequence: SequenceAnimation[] = []
-  for (let i = 0; i < formatedAnimations.value.length; i++) {
-    const step = formatedAnimations.value[i]
-    for (let j = 0; j < step.animations.length; j++) {
-      const animation = step.animations[j]
-      const element = currentSlide.value.elements.find(item => item.id === animation.elId)
-      const groupId = animation.target?.groupId
-      if (!element && !groupId) continue
-      sequence.push({
-        ...animation,
-        index: j === 0 ? i + 1 : '',
-        elType: groupId ? '组合' : ELEMENT_TYPE_ZH[element!.type],
-        animationEffect: getAnimationEffectLabel(animation.effect, animation.type),
-        targetLabel: animation.target?.characterRange
-          ? `字符 ${animation.target.characterRange.start + 1}–${animation.target.characterRange.end + 1}`
-          : animation.target?.paragraphRange
-            ? `段落 ${animation.target.paragraphRange.start + 1}–${animation.target.paragraphRange.end + 1}`
-            : animation.target?.paragraphIndex === undefined ? '' : `段落 ${animation.target.paragraphIndex + 1}`,
-        directionLabel: getAnimationDirectionLabel(animation),
-      })
-    }
+  let clickIndex = 0
+  for (let position = 0; position < currentSlideAnimations.value.length; position++) {
+    const animation = currentSlideAnimations.value[position]
+    const element = currentSlide.value.elements.find(item => item.id === animation.elId)
+    const groupId = animation.target?.groupId
+    if (!element && !groupId) continue
+    const simultaneous = animation.trigger === 'meantime' && sequence.length > 0
+    if (!simultaneous) clickIndex += 1
+    const isFirst = position === 0
+    const triggerLabel = animation.trigger === 'click'
+      ? '单击时'
+      : animation.trigger === 'meantime'
+        ? isFirst ? '与页面切换同时' : '与上一动画同时'
+        : isFirst ? '页面切换之后' : '上一动画之后'
+    sequence.push({
+      ...animation,
+      index: simultaneous ? '' : clickIndex,
+      elType: groupId ? '组合' : ELEMENT_TYPE_ZH[element!.type],
+      elementLabel: elementDisplayLabel(element, groupId),
+      animationEffect: getAnimationEffectLabel(animation.effect, animation.type),
+      targetLabel: animation.target?.characterRange
+        ? `字符 ${animation.target.characterRange.start + 1}–${animation.target.characterRange.end + 1}`
+        : animation.target?.paragraphRange
+          ? `段落 ${animation.target.paragraphRange.start + 1}–${animation.target.paragraphRange.end + 1}`
+          : animation.target?.paragraphIndex === undefined ? '' : `段落 ${animation.target.paragraphIndex + 1}`,
+      directionLabel: getAnimationDirectionLabel(animation),
+      triggerLabel,
+    })
   }
   return sequence
 })
 
+const selectedAnimation = computed(() => animationSequence.value.find(animation => animation.id === activeAnimationId.value))
+const selectedAnimationIndex = computed(() => animationSequence.value.findIndex(animation => animation.id === activeAnimationId.value))
+const animationStartOptions = computed(() => selectedAnimationIndex.value === 0
+  ? [
+      { label: '单击时', value: 'click' },
+      { label: '与页面切换同时', value: 'meantime' },
+      { label: '页面切换之后', value: 'auto' },
+    ]
+  : [
+      { label: '单击时', value: 'click' },
+      { label: '与上一动画同时', value: 'meantime' },
+      { label: '上一动画之后', value: 'auto' },
+    ])
+
 const selectAnimation = (animation: PPTAnimation) => {
-  if (activeAnimationId.value === animation.id) {
-    activeAnimationId.value = ''
-    advancedAnimationId.value = ''
-    return
-  }
-  if (activeAnimationId.value !== animation.id) advancedAnimationId.value = ''
   activeAnimationId.value = animation.id
   const groupId = animation.target?.groupId
   if (!groupId) {
@@ -432,13 +478,8 @@ const selectAnimation = (animation: PPTAnimation) => {
 const deleteAnimation = (id: string) => {
   const animations = currentSlideAnimations.value.filter(item => item.id !== id)
   commitAnimations(animations)
-  if (advancedAnimationId.value === id) advancedAnimationId.value = ''
-  activeAnimationId.value = animations.find(item => animationTargetIds.value.includes(item.elId))?.id || ''
+  activeAnimationId.value = animations.find(item => animationTargetIds.value.includes(item.elId))?.id || animations[0]?.id || ''
   addHistorySnapshot()
-}
-
-const toggleAdvancedSettings = (id: string) => {
-  advancedAnimationId.value = advancedAnimationId.value === id ? '' : id
 }
 
 const handleDragEnd = (eventData: { newIndex: number; oldIndex: number }) => {
@@ -479,7 +520,12 @@ const stopPoolPreview = () => {
 }
 const previewPoolAnimation = (event: MouseEvent, type: EditableAnimationType, effect: string) => {
   stopPoolPreview()
-  const target = event.currentTarget as HTMLElement
+  // Keep the hover hit area stationary. Animating the pool item itself can
+  // move it away from the pointer, immediately firing mouseleave/mouseenter
+  // and producing a rapid flash loop for fly, zoom and bounce effects.
+  const poolItem = event.currentTarget as HTMLElement
+  const target = poolItem.querySelector<HTMLElement>('.animation-box')
+  if (!target) return
   const handle = runElementAnimation(target, {
     id: 'pool-preview',
     elId: 'pool-preview',
@@ -630,8 +676,10 @@ $motionColor: #6f7fc6;
 
 .element-animation-panel {
   height: 100%;
+  min-width: 0;
   display: flex;
   flex-direction: column;
+  overflow-x: hidden;
 }
 .element-animation {
   height: 32px;
@@ -641,69 +689,156 @@ $motionColor: #6f7fc6;
 .element-animation-btn {
   width: 100%;
 }
-.pane-title {
-  margin: -2px 0 10px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #555;
-}
-.config-item {
+.pane-toolbar {
+  flex: none;
   display: flex;
   align-items: center;
-
-  & + .config-item {
-    margin-top: 5px;
-  }
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 7px;
 }
-.configs-collapse {
-  display: grid;
-  grid-template-rows: 0fr;
-  transition: grid-template-rows .22s ease;
-
-  &.expanded {
-    grid-template-rows: 1fr;
-  }
-}
-.configs {
-  min-height: 0;
-  overflow: hidden;
-}
-.primary-config-row {
+.sequence-title {
   display: flex;
+  align-items: center;
   gap: 6px;
+  color: #555;
+  font-weight: 600;
 }
-.compact-config-item {
-  width: calc(50% - 3px);
+.sequence-count {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  color: #777;
+  background: #f0f0f0;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 18px;
+  text-align: center;
+}
+.selected-animation-editor {
+  flex: none;
+  margin-bottom: 7px;
+  padding: 8px;
+  border: 1px solid #dedede;
+  border-radius: $borderRadius;
+  background: #fafafa;
+}
+.selected-animation-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.selected-animation-name {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 600;
+  @include ellipsis-oneline();
+}
+.selected-animation-actions {
+  flex: none;
+  display: flex;
+  color: #777;
+  font-size: 15px;
+}
+.advanced-settings-trigger {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  color: #777;
+  background: transparent;
+  font-size: 15px;
+  cursor: pointer;
+
+  &:hover {
+    color: $themeColor;
+    background: rgba($color: $themeColor, $alpha: .08);
+  }
+}
+.effect-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: $motionColor;
+
+  &.in { background: $inColor; }
+  &.out { background: $outColor; }
+  &.attention { background: $attentionColor; }
+}
+.property-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  & + .property-row {
+    margin-top: 7px;
+  }
+  > :last-child {
+    flex: 1;
+    min-width: 0;
+  }
+}
+.property-label {
+  flex: none;
+  width: 52px;
+  color: #666;
+}
+.effect-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
+  letter-spacing: 0;
+}
+.quick-settings-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 6px;
+}
+.quick-setting {
   min-width: 0;
 
-  &.single {
-    width: 100%;
+  &:only-child {
+    grid-column: 1 / -1;
   }
 }
-.compact-config-label {
+.quick-setting-label {
   margin: 0 0 3px 2px;
-  color: #666;
-  font-size: 12px;
+  color: #777;
+  font-size: 11px;
 }
-.change-animation {
-  margin-top: 6px;
+.advanced-timing-title {
+  margin-bottom: 9px;
+  color: #555;
+  font-weight: 600;
 }
-.advanced-settings-toggle {
-  margin-top: 6px;
-  padding: 6px 2px 1px;
-  border-top: 1px solid $borderColor;
+.auto-reverse-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  color: #666;
-  cursor: pointer;
-  user-select: none;
+  margin-top: 7px;
+  color: #777;
 }
-.advanced-settings {
-  margin-top: 5px;
-  padding: 6px;
+.selected-animation-empty {
+  flex: none;
+  margin-bottom: 7px;
+  padding: 8px 10px;
+  border: 1px dashed #d7d7d7;
   border-radius: $borderRadius;
-  background-color: #f7f7f7;
+  color: #999;
+  text-align: center;
+  font-size: 11px;
 }
 .tip {
   height: 32px;
@@ -763,23 +898,28 @@ $motionColor: #6f7fc6;
   cursor: pointer;
 }
 .animation-box {
+  width: 100%;
+  height: 100%;
   background-color: $lightGray;
   border-radius: $borderRadius;
+  pointer-events: none;
 }
 
 .animation-sequence {
   flex: 1;
-  padding-right: 8px;
-  margin-right: -8px;
+  min-height: 120px;
+  min-width: 0;
+  padding-right: 2px;
 
   @include overflow-overlay();
 }
 .sequence-item {
-  border: 1px solid $borderColor;
-  padding: 6px 7px;
+  border: 1px solid #dedede;
+  padding: 4px 5px;
   border-radius: $borderRadius;
-  margin-bottom: 6px;
-  transition: border-color .2s;
+  margin-bottom: 3px;
+  background: #fff;
+  transition: border-color .16s, background-color .16s, box-shadow .16s;
 
   &.in.active {
     border-color: $inColor;
@@ -794,7 +934,8 @@ $motionColor: #6f7fc6;
     border-color: $motionColor;
   }
   &.active {
-    height: auto;
+    background: rgba($color: $themeColor, $alpha: .035);
+    box-shadow: inset 0 0 0 1px rgba($color: $themeColor, $alpha: .06);
   }
 
   .sequence-content {
@@ -813,31 +954,57 @@ $motionColor: #6f7fc6;
 
     .index {
       flex: none;
-      width: 18px;
+      width: 20px;
+      height: 20px;
+      line-height: 18px;
+      border: 1px solid #d4d4d4;
+      border-radius: 4px;
+      color: #555;
+      text-align: center;
+      font-size: 12px;
+
+      &.simultaneous {
+        color: #999;
+        border-color: transparent;
+      }
     }
-    .text {
+    .effect-bar {
+      align-self: center;
+      flex: none;
+      width: 3px;
+      height: 20px;
+      margin-left: 6px;
+      border-radius: 2px;
+      background: $motionColor;
+
+      &.in { background: $inColor; }
+      &.out { background: $outColor; }
+      &.attention { background: $attentionColor; }
+    }
+    .text-block {
       flex: 1;
       min-width: 0;
+      margin-left: 7px;
+    }
+    .object-name {
+      color: #444;
+      line-height: 20px;
       @include ellipsis-oneline();
-
-      .direction {
-        color: #888;
-      }
     }
     .handler {
       flex: none;
-      min-width: 64px;
+      min-width: 44px;
       font-size: 15px;
       text-align: right;
+      opacity: .58;
     }
     .handler-btn {
       margin-left: 6px;
       cursor: pointer;
     }
-    .expand-icon {
-      margin-left: 5px;
-      color: #999;
-      font-size: 12px;
+    &:hover .handler,
+    &:focus-visible .handler {
+      opacity: 1;
     }
   }
 }

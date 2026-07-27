@@ -28,5 +28,15 @@ for (const entry of await readdir(join(stagedDist, 'backend'))) {
   }
 }
 await rm(finalDist, { recursive: true, force: true })
-await rename(stagedDist, finalDist)
+try {
+  await rename(stagedDist, finalDist)
+}
+catch (error) {
+  // Windows can temporarily deny a directory rename when antivirus/indexing
+  // has a handle open. Copying the already assembled tree is an equivalent,
+  // reliable fallback and keeps the production build deterministic.
+  if (error?.code !== 'EPERM' && error?.code !== 'EXDEV') throw error
+  await cp(stagedDist, finalDist, { recursive: true })
+  await rm(stagedDist, { recursive: true, force: true })
+}
 console.log(`统一生产目录已生成：${finalDist}`)

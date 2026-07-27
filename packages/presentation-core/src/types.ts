@@ -12,6 +12,15 @@ export interface PptxElementSource {
 
 export interface MorphTransition {
   mode: PptxMorphMode
+  /** User-authored object pairs. These take priority over imported names and inference. */
+  links?: MorphObjectLink[]
+  /** Targets on the destination slide that must fade in instead of being inferred. */
+  excludedToElementIds?: string[]
+}
+
+export interface MorphObjectLink {
+  fromElementId: string
+  toElementId: string
 }
 
 export interface SlideTransition {
@@ -110,14 +119,21 @@ export interface MorphableElement {
   height: number
   rotate: number
   name?: string
+  /** Stable editor-authored identity retained when an object is copied across slides. */
+  morphKey?: string
   source?: PptxElementSource
   contentFingerprint?: string
+  appearanceFingerprint?: string
 }
 
 export interface MorphElementMatch<T extends MorphableElement = MorphableElement> {
   from: T
   to: T
-  confidence: 'forced' | 'strong' | 'inferred'
+  confidence: 'explicit' | 'forced' | 'strong' | 'inferred'
+  /** Why the objects were paired. Useful for explaining and editing Morph associations. */
+  reason?: 'manual' | 'forcedName' | 'elementId' | 'morphKey' | 'creationId' | 'shapeId' | 'inferred'
+  /** Weighted automatic-match score. Manual and forced-name matches do not require one. */
+  score?: number
 }
 
 export interface MorphMatchResult<T extends MorphableElement = MorphableElement> {

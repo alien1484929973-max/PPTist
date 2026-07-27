@@ -7,6 +7,11 @@ export interface AnimationStep<T> {
 
 export type TimelineStep = AnimationStep<TimelineAnimation>
 
+export interface SlideEntryAnimationPlan {
+  phase: 'withTransition' | 'afterTransition'
+  steps: TimelineStep[]
+}
+
 export const timelineTargetKey = (target: TimelineTarget) => {
   const element = target.groupId || target.elementId || target.sourceShapeId
   if (!element) return undefined
@@ -112,6 +117,32 @@ export class PresentationPlayerController<T extends PlayableSlide = PlayableSlid
     const stepCount = compileTimeline(this.currentSlide.animationTimeline).length
     this._stepIndex = Math.min(Math.max(stepIndex, 0), stepCount)
     return action
+  }
+
+  /**
+   * Consume the automatic animation chain at the beginning of a newly entered
+   * slide. PowerPoint treats the slide transition as the previous event for
+   * the first animation: With Previous overlaps it, After Previous waits for
+   * it, and On Click remains pending.
+   */
+  consumeSlideEntryAnimations(): SlideEntryAnimationPlan | undefined {
+    if (!this.currentSlide || this._stepIndex !== 0) return undefined
+    const steps = compileTimeline(this.currentSlide.animationTimeline)
+    const first = steps[0]?.animations[0]
+    if (!first || first.timing.trigger === 'click') return undefined
+
+    const automaticSteps: TimelineStep[] = []
+    let index = 0
+    do {
+      automaticSteps.push(steps[index])
+      this._stepIndex += 1
+      index += 1
+    } while (index < steps.length && steps[index - 1].autoAdvance)
+
+    return {
+      phase: first.timing.trigger === 'withPrevious' ? 'withTransition' : 'afterTransition',
+      steps: automaticSteps,
+    }
   }
 
   next(): PlayerAction {

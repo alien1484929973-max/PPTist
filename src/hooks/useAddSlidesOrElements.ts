@@ -2,6 +2,7 @@ import { storeToRefs } from 'pinia'
 import { nanoid } from 'nanoid'
 import { useSlidesStore, useMainStore } from '@/store'
 import type { PPTElement, Slide } from '@/types/slides'
+import { presentationMorphKeyForCopy } from '@pptist/presentation-core'
 import { createSlideIdMap, createElementIdMap, getElementRange } from '@/utils/element'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 
@@ -16,8 +17,9 @@ export default () => {
    * 添加指定的元素数据（一组）
    * @param elements 元素列表数据
    */
-  const addElementsFromData = (elements: PPTElement[]) => {
+  const addElementsFromData = (elements: PPTElement[], options?: { sourceSlideId?: string }) => {
     const { groupIdMap, elIdMap } = createElementIdMap(elements)
+    const preserveMorphIdentity = !!options?.sourceSlideId && options.sourceSlideId !== currentSlide.value.id
 
     const firstElement = elements[0]
     let offset = 0
@@ -47,7 +49,12 @@ export default () => {
     } while (lastSameElement)
     
     for (const element of elements) {
-      element.id = elIdMap[element.id]
+      const oldId = element.id
+      const newId = elIdMap[oldId]
+      const morphKey = presentationMorphKeyForCopy(element, newId, preserveMorphIdentity)
+      element.id = newId
+      if (morphKey) element.morphKey = morphKey
+      else delete element.morphKey
 
       element.left = element.left + offset
       element.top = element.top + offset
@@ -69,7 +76,12 @@ export default () => {
       const { groupIdMap, elIdMap } = createElementIdMap(slide.elements)
 
       for (const element of slide.elements) {
-        element.id = elIdMap[element.id]
+        const oldId = element.id
+        const newId = elIdMap[oldId]
+        const morphKey = presentationMorphKeyForCopy(element, newId, true)
+        element.id = newId
+        if (morphKey) element.morphKey = morphKey
+        else delete element.morphKey
         if (element.groupId) element.groupId = groupIdMap[element.groupId]
 		
         // 若元素绑定了页面跳转链接
@@ -115,6 +127,17 @@ export default () => {
           else if (animation.target.elementId) {
             animation.target.elementId = elIdMap[animation.target.elementId]
           }
+        }
+      }
+      if (slide.transition?.morph) {
+        // Object links are page-pair specific. A copied slide keeps automatic
+        // identities, but stale links/exclusions from its old predecessor must
+        // not be applied to the new page pair.
+        slide.transition = {
+          ...slide.transition,
+          morph: {
+            mode: slide.transition.morph.mode,
+          },
         }
       }
       return {

@@ -2,6 +2,7 @@ import { nextTick, onUnmounted, watch, type Ref } from 'vue'
 import {
   createPresentationMorphCandidates,
   matchMorphElements,
+  presentationMorphNeedsAnimation,
   presentationMorphNeedsCrossfade,
 } from '@pptist/presentation-core'
 import type { Slide } from '@/types/slides'
@@ -35,14 +36,13 @@ export default (
     const toSlide = slides.value[toIndex]
     if (!fromSlide || !toSlide) return
 
-    const transition = toSlide.transition?.type === 'morph'
-      ? toSlide.transition
-      : fromSlide.transition?.type === 'morph' ? fromSlide.transition : undefined
+    const transition = toSlide.transition?.type === 'morph' ? toSlide.transition : undefined
     if (!transition) return
 
     const result = matchMorphElements(
       createPresentationMorphCandidates(fromSlide.elements),
       createPresentationMorphCandidates(toSlide.elements),
+      transition.morph,
     )
     // The watcher runs before Vue patches the slide list, so this is the last
     // reliable moment to snapshot elements that only exist on the leaving page.
@@ -68,7 +68,7 @@ export default (
     const duration = Math.max(100, transition.duration || 700)
     const timing: KeyframeAnimationOptions = {
       duration,
-      easing: 'cubic-bezier(0.4, 0, 0.2, 1)',
+      easing: 'cubic-bezier(0.33, 0, 0.15, 1)',
       fill: 'both',
     }
 
@@ -105,10 +105,18 @@ export default (
       const target = queryElement(toSlide.id, match.to.id)
       if (!target) continue
 
+      // A mathematically no-op transform still makes Chromium re-rasterize
+      // text and images, which can cause a one-frame vertical jump.
+      if (!presentationMorphNeedsAnimation(match.from, match.to)) continue
+
       const scaleX = match.from.width / match.to.width
       const scaleY = match.from.height / match.to.height
-      const translateX = match.from.left - match.to.left
-      const translateY = match.from.top - match.to.top
+      const fromCenterX = match.from.left + match.from.width / 2
+      const fromCenterY = match.from.top + match.from.height / 2
+      const toCenterX = match.to.left + match.to.width / 2
+      const toCenterY = match.to.top + match.to.height / 2
+      const translateX = fromCenterX - toCenterX
+      const translateY = fromCenterY - toCenterY
       const rotate = match.from.rotate - match.to.rotate
       const sourceClone = matchedClones.get(match.from.id)
 
@@ -117,7 +125,6 @@ export default (
         sourceClone.setAttribute('aria-hidden', 'true')
         sourceClone.style.pointerEvents = 'none'
         sourceClone.style.zIndex = `${1000 + match.from.order}`
-        sourceClone.style.transformOrigin = 'top left'
         targetStage.appendChild(sourceClone)
         temporaryNodes.push(sourceClone)
         runningAnimations.push(sourceClone.animate([
@@ -127,20 +134,32 @@ export default (
           },
           {
             transform: `translate(${-translateX}px, ${-translateY}px) rotate(${-rotate}deg) scale(${1 / scaleX}, ${1 / scaleY})`,
+            opacity: .85,
+            offset: .35,
+          },
+          {
+            transform: `translate(${-translateX}px, ${-translateY}px) rotate(${-rotate}deg) scale(${1 / scaleX}, ${1 / scaleY})`,
             opacity: 0,
+            offset: 1,
           },
         ], timing))
       }
 
-      target.style.transformOrigin = 'top left'
       runningAnimations.push(target.animate([
         {
           transform: `translate(${translateX}px, ${translateY}px) rotate(${rotate}deg) scale(${scaleX}, ${scaleY})`,
           opacity: sourceClone ? 0 : 1,
+          offset: 0,
+        },
+        {
+          transform: `translate(${translateX * .65}px, ${translateY * .65}px) rotate(${rotate * .65}deg) scale(${1 + (scaleX - 1) * .65}, ${1 + (scaleY - 1) * .65})`,
+          opacity: sourceClone ? .15 : 1,
+          offset: .35,
         },
         {
           transform: 'translate(0, 0) rotate(0deg) scale(1, 1)',
           opacity: 1,
+          offset: 1,
         },
       ], timing))
     }

@@ -138,9 +138,14 @@ export default () => {
 
   const turnSlideToIndex = (index: number) => {
     const boundedIndex = Math.min(Math.max(index, 0), Math.max(0, slides.value.length - 1))
-    if (dependencyPlayer.value) dependencyPlayer.value.goTo(boundedIndex)
-    else slidesStore.updateSlideIndex(boundedIndex)
-    animationIndex.value = 0
+    if (dependencyPlayer.value) {
+      const state = dependencyPlayer.value.goTo(boundedIndex)
+      animationIndex.value = state.stepIndex
+    }
+    else {
+      slidesStore.updateSlideIndex(boundedIndex)
+      animationIndex.value = 0
+    }
   }
 
   const turnSlideToId = (id: string) => {

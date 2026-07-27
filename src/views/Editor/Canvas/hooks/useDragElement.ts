@@ -1,5 +1,6 @@
 import type { Ref } from 'vue'
 import { storeToRefs } from 'pinia'
+import { presentationMorphKeyForCopy } from '@pptist/presentation-core'
 import { useMainStore, useSlidesStore, useKeyboardStore } from '@/store'
 import type { PPTElement } from '@/types/slides'
 import type { AlignmentLineProps } from '@/types/edit'
@@ -126,7 +127,9 @@ export default (
       const { groupIdMap, elIdMap } = createElementIdMap(sourceElements)
 
       const duplicatedElements = sourceElements.map(item => {
-        item.id = elIdMap[item.id]
+        const newId = elIdMap[item.id]
+        item.morphKey = presentationMorphKeyForCopy(item, newId, false)
+        item.id = newId
         if (isActiveGroupElement && item.groupId) delete item.groupId
         else if (item.groupId) item.groupId = groupIdMap[item.groupId]
         return item

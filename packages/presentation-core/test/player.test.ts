@@ -36,6 +36,43 @@ test('timeline compiler groups with-previous animations and marks automatic cont
   ])
 })
 
+test('slide entry consumes With Previous during transition and After Previous after transition', () => {
+  const controller = new PresentationPlayerController()
+  controller.load([
+    { id: 'one' },
+    {
+      id: 'two',
+      animationTimeline: {
+        version: 1,
+        animations: [
+          animation('with-transition', 'withPrevious'),
+          animation('after-first', 'afterPrevious'),
+          animation('wait-for-click', 'click'),
+        ],
+      },
+    },
+  ])
+
+  assert.equal(controller.next().type, 'slide')
+  const entry = controller.consumeSlideEntryAnimations()
+  assert.equal(entry?.phase, 'withTransition')
+  assert.deepEqual(entry?.steps.map(step => step.animations.map(item => item.id)), [
+    ['with-transition'],
+    ['after-first'],
+  ])
+  assert.equal(controller.stepIndex, 2)
+  assert.equal(controller.next().type, 'animations')
+
+  controller.load([{
+    id: 'after',
+    animationTimeline: {
+      version: 1,
+      animations: [animation('after-transition', 'afterPrevious')],
+    },
+  }])
+  assert.equal(controller.consumeSlideEntryAnimations()?.phase, 'afterTransition')
+})
+
 test('timeline compiler keeps simultaneous paragraph targets on the same element', () => {
   const scopedTimeline: AnimationTimeline = {
     version: 1,
@@ -96,7 +133,8 @@ test('shared morph candidates preserve PPTist identity and appearance', () => {
     },
   ])
 
-  assert.equal(candidates[0].name, '!!Title')
+  assert.equal(candidates[0].morphKey, '!!Title')
+  assert.equal(candidates[0].name, undefined)
   assert.equal(candidates[0].contentFingerprint, 'hello')
   assert.equal(candidates[1].width, 100)
   assert.equal(candidates[1].height, 24)

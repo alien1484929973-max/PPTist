@@ -60,9 +60,9 @@ export default () => {
 
     // 元素或页面
     if (typeof clipboardData === 'object') {
-      const { type, data } = clipboardData
+      const { type, data, sourceSlideId } = clipboardData
 
-      if (type === 'elements' && !onlySlide) addElementsFromData(data)
+      if (type === 'elements' && !onlySlide) addElementsFromData(data, { sourceSlideId })
       else if (type === 'slides' && !onlyElements) addSlidesFromData(data)
     }
 

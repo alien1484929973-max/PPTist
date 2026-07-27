@@ -3,6 +3,7 @@ import { storeToRefs } from 'pinia'
 import { nanoid } from 'nanoid'
 import { useMainStore, useSlidesStore } from '@/store'
 import type { Slide } from '@/types/slides'
+import { presentationMorphKeyForCopy } from '@pptist/presentation-core'
 import { copyText, readClipboard } from '@/utils/clipboard'
 import { encrypt } from '@/utils/crypto'
 import { createElementIdMap } from '@/utils/element'
@@ -95,7 +96,9 @@ export default () => {
     const { groupIdMap, elIdMap } = createElementIdMap(slide.elements)
 
     for (const element of slide.elements) {
-      element.id = elIdMap[element.id]
+      const newId = elIdMap[element.id]
+      element.morphKey = presentationMorphKeyForCopy(element, newId, false)
+      element.id = newId
       if (element.groupId) element.groupId = groupIdMap[element.groupId]
     }
     const newSlide = {

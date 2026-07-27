@@ -239,7 +239,11 @@ export interface PlayerSlide {
     duration: number
     direction?: string | null
     autoAdvanceAfter?: number
-    morph?: { mode: 'byObject' | 'byWord' | 'byChar' }
+    morph?: {
+      mode: 'byObject' | 'byWord' | 'byChar'
+      links?: Array<{ fromElementId: string; toElementId: string }>
+      excludedToElementIds?: string[]
+    }
     source?: 'pptx' | 'editor'
   }
   turningMode?: 'no' | 'fade' | 'morph' | 'slideX' | 'slideY' | 'random' | 'slideX3D' | 'slideY3D' | 'rotate' | 'scaleY' | 'scaleX' | 'scale' | 'scaleReverse'

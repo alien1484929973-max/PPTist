@@ -144,6 +144,7 @@ declare module 'vue' {
     'IIconParkOutline:transform': typeof import('~icons/icon-park-outline/transform')['default']
     'IIconParkOutline:undo': typeof import('~icons/icon-park-outline/undo')['default']
     'IIconParkOutline:ungroup': typeof import('~icons/icon-park-outline/ungroup')['default']
+    'IIconParkOutline:unlink': typeof import('~icons/icon-park-outline/unlink')['default']
     'IIconParkOutline:unlock': typeof import('~icons/icon-park-outline/unlock')['default']
     'IIconParkOutline:up': typeof import('~icons/icon-park-outline/up')['default']
     'IIconParkOutline:upload': typeof import('~icons/icon-park-outline/upload')['default']

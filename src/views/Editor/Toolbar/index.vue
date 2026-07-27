@@ -93,6 +93,8 @@ const currentPanelComponent = computed(() => {
   flex-direction: column;
 }
 .content {
+  flex: 1;
+  min-height: 0;
   padding: 12px;
   font-size: 13px;
 

@@ -4,6 +4,7 @@ import {
   createPresentationMorphCandidates,
   createAnimationPlan,
   matchMorphElements,
+  presentationMorphNeedsAnimation,
   presentationMorphNeedsCrossfade,
   resolveDomAnimationTargets,
   runDomAnimation,
@@ -11,6 +12,7 @@ import {
   timelineTargetKey,
   type DomAnimationHandle,
   type DomAnimationTargets,
+  type SlideEntryAnimationPlan,
   type TimelineAnimation,
 } from '@pptist/presentation-core'
 import {
@@ -21,6 +23,7 @@ import {
 import { asCoreTimeline, timelineForSlide } from './timeline'
 import { parsePlayerDocument } from './schema'
 import { resolvePlayerResourceUrl } from './resources'
+import { prepareTextMorph } from './textMorph'
 import type {
   PlayerDocument,
   PlayerDocumentSource,
@@ -46,6 +49,7 @@ const PLAYER_CSS = `
 .pptist-player-group .pptist-player-element{pointer-events:auto}
 .pptist-player-text,.pptist-player-shape-text{word-break:normal;overflow-wrap:break-word}
 .pptist-player-text,.pptist-player-shape-text{outline:0;font-size:16px;white-space:normal}
+.pptist-morph-text-hidden,.pptist-morph-text-hidden *{color:transparent!important;-webkit-text-fill-color:transparent!important;text-shadow:none!important;text-decoration-color:transparent!important}
 .pptist-player-text p,.pptist-player-shape-text p{margin:var(--pptist-paragraph-space,5px) 0 0}
 .pptist-player-text p:first-child,.pptist-player-shape-text p:first-child{margin-top:0}
 .pptist-player-text ul,.pptist-player-text ol,.pptist-player-text li,.pptist-player-shape-text ul,.pptist-player-shape-text ol,.pptist-player-shape-text li{margin:var(--pptist-paragraph-space,5px) 0 0}
@@ -93,6 +97,83 @@ const hasScopedTarget = (animation: TimelineAnimation) => !!(
   animation.target.paragraphIndex !== undefined
 )
 
+const MORPH_TEXT_SELECTOR = '.pptist-player-text,.pptist-player-shape-text'
+const SVG_PATH_NUMBER = /-?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?/gi
+
+const normalizedText = (node: Element | null) => node?.textContent?.replace(/\s+/g, ' ').trim() || ''
+const pathSignature = (path: string) => path.replace(SVG_PATH_NUMBER, '#').replace(/[\s,]+/g, ' ').trim()
+
+const pathMorphKeyframes = (
+  fromPath: SVGPathElement,
+  toPath: SVGPathElement,
+  steps = 24,
+): Keyframe[] | undefined => {
+  const fromD = fromPath.getAttribute('d') || ''
+  const toD = toPath.getAttribute('d') || ''
+  if (!fromD || !toD || pathSignature(fromD) !== pathSignature(toD)) return undefined
+  const fromNumbers = Array.from(fromD.matchAll(SVG_PATH_NUMBER), match => Number(match[0]))
+  const toNumbers = Array.from(toD.matchAll(SVG_PATH_NUMBER), match => Number(match[0]))
+  if (fromNumbers.length !== toNumbers.length || fromNumbers.some(value => !Number.isFinite(value))) return undefined
+  const fromFill = fromPath.getAttribute('fill') || 'transparent'
+  const toFill = toPath.getAttribute('fill') || 'transparent'
+  if (fromFill.includes('url(') || toFill.includes('url(')) return undefined
+  const fromStroke = fromPath.getAttribute('stroke') || 'transparent'
+  const toStroke = toPath.getAttribute('stroke') || 'transparent'
+  const fromStrokeWidth = fromPath.getAttribute('stroke-width') || '0'
+  const toStrokeWidth = toPath.getAttribute('stroke-width') || '0'
+
+  return Array.from({ length: steps + 1 }, (_, index) => {
+    const progress = index / steps
+    let numberIndex = 0
+    const d = toD.replace(SVG_PATH_NUMBER, () => {
+      const value = fromNumbers[numberIndex] + (toNumbers[numberIndex] - fromNumbers[numberIndex]) * progress
+      numberIndex += 1
+      return Number(value.toFixed(4)).toString()
+    })
+    return {
+      offset: progress,
+      d: `path("${d}")`,
+      fill: progress === 0 ? fromFill : progress === 1 ? toFill : undefined,
+      stroke: progress === 0 ? fromStroke : progress === 1 ? toStroke : undefined,
+      strokeWidth: progress === 0 ? fromStrokeWidth : progress === 1 ? toStrokeWidth : undefined,
+    } as Keyframe
+  })
+}
+
+const visualStyleKeyframes = (from: Element, to: Element): [Keyframe, Keyframe] | undefined => {
+  const view = to.ownerDocument.defaultView
+  if (!view) return undefined
+  const source = view.getComputedStyle(from)
+  const target = view.getComputedStyle(to)
+  const snapshot = (style: CSSStyleDeclaration): Keyframe => ({
+    color: style.color,
+    backgroundColor: style.backgroundColor,
+    borderColor: style.borderColor,
+    borderRadius: style.borderRadius,
+    borderWidth: style.borderWidth,
+    fontSize: style.fontSize,
+    fontWeight: style.fontWeight,
+    letterSpacing: style.letterSpacing,
+    lineHeight: style.lineHeight,
+    textShadow: style.textShadow,
+    filter: style.filter,
+    opacity: style.opacity,
+  })
+  return [snapshot(source), snapshot(target)]
+}
+
+const matchingTextStylePairs = (fromRoot: Element, toRoot: Element) => {
+  const fromText = fromRoot.querySelector<HTMLElement>(MORPH_TEXT_SELECTOR)
+  const toText = toRoot.querySelector<HTMLElement>(MORPH_TEXT_SELECTOR)
+  if (!fromText && !toText) return []
+  if (!fromText || !toText || normalizedText(fromText) !== normalizedText(toText)) return undefined
+  const fromNodes = [fromText, ...Array.from(fromText.querySelectorAll<HTMLElement>('*'))]
+  const toNodes = [toText, ...Array.from(toText.querySelectorAll<HTMLElement>('*'))]
+  if (fromNodes.length !== toNodes.length) return undefined
+  if (fromNodes.some((node, index) => node.tagName !== toNodes[index].tagName)) return undefined
+  return fromNodes.map((node, index) => [node, toNodes[index]] as const)
+}
+
 export class DomPresentationPlayer implements PresentationPlayer {
   private readonly ownerDocument: Document
   private readonly viewport: HTMLElement
@@ -103,7 +184,9 @@ export class DomPresentationPlayer implements PresentationPlayer {
   private readonly cleanupHandlers: Array<() => void> = []
   private readonly preparedTargets = new Map<string, DomAnimationTargets>()
   private slideTransitionAnimations: Animation[] = []
+  private slideTransitionCleanupHandlers: Array<() => void> = []
   private slideTransitionGeneration = 0
+  private renderGeneration = 0
   private activeLayer?: HTMLElement
   private readonly addedHostClass: boolean
   private readonly originalTabIndex: string | null
@@ -113,6 +196,8 @@ export class DomPresentationPlayer implements PresentationPlayer {
   private ended = false
   private destroyed = false
   private queue: Promise<PlayerState> = Promise.resolve({ slideIndex: 0, stepIndex: 0, slideCount: 0, ended: false })
+  private playbackGeneration = 0
+  private playbackBusy = false
   private wheelDelta = 0
   private wheelDirection = 0
   private wheelGestureConsumed = false
@@ -156,6 +241,7 @@ export class DomPresentationPlayer implements PresentationPlayer {
 
   load(source: PlayerDocumentSource, startIndex = this.options.startIndex || 0) {
     if (this.destroyed) throw new Error('The presentation player has been destroyed.')
+    this.interruptPlaybackQueue()
     const presentation = parsePlayerDocument(source)
 
     this.presentation = presentation
@@ -175,31 +261,38 @@ export class DomPresentationPlayer implements PresentationPlayer {
   }
 
   next() {
-    return this.enqueue(() => this.advance())
+    const generation = this.playbackGeneration
+    return this.enqueuePlayback(generation, () => this.advance(generation))
   }
 
   previous() {
-    return this.enqueue(async () => {
+    const generation = this.playbackGeneration
+    return this.enqueuePlayback(generation, async () => {
       const fromIndex = this.controller.slideIndex
       const action = this.controller.previous()
       this.ended = false
       if (action.type === 'animations') this.renderCurrentSlide(action.stepIndex)
       else if (action.type === 'slide') await this.renderCurrentSlide(this.controller.stepIndex, fromIndex, -1)
+      if (generation !== this.playbackGeneration) return this.state
       this.emitState()
       return this.state
     })
   }
 
   goTo(slideIndex: number) {
+    this.interruptPlaybackQueue()
     const fromIndex = this.controller.slideIndex
     this.controller.goTo(slideIndex)
+    const changedSlide = this.controller.slideIndex !== fromIndex
+    const entryPlan = changedSlide ? this.controller.consumeSlideEntryAnimations() : undefined
     this.ended = false
-    void this.renderCurrentSlide(0, fromIndex, this.controller.slideIndex >= fromIndex ? 1 : -1)
+    void this.renderCurrentSlide(0, fromIndex, this.controller.slideIndex >= fromIndex ? 1 : -1, entryPlan)
     this.emitState()
     return this.state
   }
 
   goToStep(slideIndex: number, stepIndex: number) {
+    this.interruptPlaybackQueue()
     this.controller.seek(slideIndex, stepIndex)
     this.ended = false
     this.renderCurrentSlide(this.controller.stepIndex)
@@ -226,6 +319,8 @@ export class DomPresentationPlayer implements PresentationPlayer {
   destroy() {
     if (this.destroyed) return
     this.destroyed = true
+    this.playbackGeneration += 1
+    this.renderGeneration += 1
     this.cancelSlideTransition()
     this.clearPlaybackState()
     this.resizeObserver?.disconnect()
@@ -245,18 +340,40 @@ export class DomPresentationPlayer implements PresentationPlayer {
     return this.queue
   }
 
-  private async advance(): Promise<PlayerState> {
-    if (this.destroyed) return this.state
+  private enqueuePlayback(generation: number, action: () => Promise<PlayerState>) {
+    return this.enqueue(async () => {
+      if (generation !== this.playbackGeneration || this.destroyed) return this.state
+      this.playbackBusy = true
+      try {
+        return await action()
+      }
+      finally {
+        if (generation === this.playbackGeneration) this.playbackBusy = false
+      }
+    })
+  }
+
+  private interruptPlaybackQueue() {
+    this.playbackGeneration += 1
+    this.playbackBusy = false
+    this.queue = Promise.resolve(this.state)
+  }
+
+  private async advance(generation = this.playbackGeneration): Promise<PlayerState> {
+    if (this.destroyed || generation !== this.playbackGeneration) return this.state
     const fromIndex = this.controller.slideIndex
     const action = this.controller.next()
     if (action.type === 'animations') {
       await Promise.all(action.step.animations.map(animation => this.runAnimation(animation)))
+      if (generation !== this.playbackGeneration) return this.state
       this.emitState()
-      if (action.step.autoAdvance) return this.advance()
+      if (action.step.autoAdvance) return this.advance(generation)
     }
     else if (action.type === 'slide') {
       this.ended = false
-      await this.renderCurrentSlide(0, fromIndex, 1)
+      const entryPlan = this.controller.consumeSlideEntryAnimations()
+      await this.renderCurrentSlide(0, fromIndex, 1, entryPlan)
+      if (generation !== this.playbackGeneration) return this.state
       this.emitState()
     }
     else if (action.type === 'end') {
@@ -266,7 +383,13 @@ export class DomPresentationPlayer implements PresentationPlayer {
     return this.state
   }
 
-  private async renderCurrentSlide(appliedStepCount: number, fromIndex?: number, direction: 1 | -1 = 1) {
+  private async renderCurrentSlide(
+    appliedStepCount: number,
+    fromIndex?: number,
+    direction: 1 | -1 = 1,
+    entryPlan?: SlideEntryAnimationPlan,
+  ) {
+    const renderGeneration = ++this.renderGeneration
     this.cancelSlideTransition()
     const toIndex = this.controller.slideIndex
     const shouldTransition = fromIndex !== undefined && fromIndex !== toIndex && !!this.activeLayer
@@ -388,24 +511,69 @@ export class DomPresentationPlayer implements PresentationPlayer {
       }
     }
 
+    const runEntryAnimations = async () => {
+      if (!entryPlan) return
+      for (const step of entryPlan.steps) {
+        if (renderGeneration !== this.renderGeneration) return
+        await Promise.all(step.animations.map(animation => this.runAnimation(animation)))
+      }
+    }
+
     if (previousLayer && fromIndex !== undefined) {
       const fromSlide = this.presentation.slides[fromIndex]
-      if (fromSlide) await this.runSlideTransition(previousLayer, layer, fromSlide, slide, direction)
-      else previousLayer.remove()
+      if (fromSlide) {
+        const transition = this.runSlideTransition(previousLayer, layer, fromSlide, slide, direction)
+        if (entryPlan?.phase === 'withTransition') await Promise.all([transition, runEntryAnimations()])
+        else {
+          await transition
+          if (renderGeneration !== this.renderGeneration) return
+          await runEntryAnimations()
+        }
+      }
+      else {
+        previousLayer.remove()
+        await runEntryAnimations()
+      }
     }
+    else await runEntryAnimations()
+  }
+
+  private finishOrAdvanceWheelStep(direction: number) {
+    const wasPlaying = this.playbackBusy
+    this.interruptPlaybackQueue()
+    this.ended = false
+
+    // A wheel gesture during playback only commits the already-consumed step.
+    // It must not consume the next animation or jump another slide.
+    if (!wasPlaying) {
+      const action = direction > 0 ? this.controller.next() : this.controller.previous()
+      if (direction > 0 && action.type === 'slide') this.controller.consumeSlideEntryAnimations()
+      if (action.type === 'end') this.ended = true
+      if (action.type === 'start' || action.type === 'end') {
+        this.emitState()
+        return
+      }
+    }
+
+    // Re-rendering the current cursor applies every completed step's final
+    // state synchronously and cancels any long-running effect or transition.
+    void this.renderCurrentSlide(this.controller.stepIndex)
+    this.emitState()
   }
 
   private cancelSlideTransition() {
     this.slideTransitionGeneration += 1
     for (const animation of this.slideTransitionAnimations) animation.cancel()
     this.slideTransitionAnimations = []
+    for (const cleanup of this.slideTransitionCleanupHandlers.reverse()) cleanup()
+    this.slideTransitionCleanupHandlers = []
     for (const layer of Array.from(this.canvas?.children || [])) {
       if (layer !== this.activeLayer) layer.remove()
     }
   }
 
   private startSlideAnimation(
-    node: HTMLElement,
+    node: Element,
     keyframes: Keyframe[],
     timing: KeyframeAnimationOptions,
   ) {
@@ -416,7 +584,7 @@ export class DomPresentationPlayer implements PresentationPlayer {
   }
 
   private transitionMode(fromSlide: PlayerSlide, toSlide: PlayerSlide) {
-    if (fromSlide.transition?.type === 'morph' || toSlide.transition?.type === 'morph') return 'morph'
+    if (toSlide.transition?.type === 'morph') return 'morph'
     if (toSlide.turningMode && toSlide.turningMode !== 'random') return toSlide.turningMode
     if (toSlide.turningMode === 'random') {
       const modes = ['slideX', 'slideY', 'slideX3D', 'slideY3D', 'fade', 'rotate', 'scaleY', 'scaleX', 'scale', 'scaleReverse'] as const
@@ -434,9 +602,7 @@ export class DomPresentationPlayer implements PresentationPlayer {
   }
 
   private transitionDuration(fromSlide: PlayerSlide, toSlide: PlayerSlide, mode: string) {
-    const transition = toSlide.transition?.type === 'morph'
-      ? toSlide.transition
-      : fromSlide.transition?.type === 'morph' ? fromSlide.transition : toSlide.transition
+    const transition = toSlide.transition
     if (transition?.duration !== undefined) return Math.max(0, transition.duration)
     if (mode === 'no') return 0
     if (mode === 'fade') return 750
@@ -454,6 +620,13 @@ export class DomPresentationPlayer implements PresentationPlayer {
     const generation = this.slideTransitionGeneration
     const mode = this.transitionMode(fromSlide, toSlide)
     const duration = this.transitionDuration(fromSlide, toSlide, mode)
+    if (mode === 'morph' && this.ownerDocument.fonts?.status === 'loading') {
+      await Promise.race([
+        this.ownerDocument.fonts.ready,
+        new Promise<void>(resolve => this.ownerDocument.defaultView?.setTimeout(resolve, 250)),
+      ])
+      if (generation !== this.slideTransitionGeneration) return
+    }
     previousLayer.style.pointerEvents = 'none'
     previousLayer.style.zIndex = '0'
     nextLayer.style.zIndex = '1'
@@ -464,7 +637,9 @@ export class DomPresentationPlayer implements PresentationPlayer {
 
     const timing: KeyframeAnimationOptions = {
       duration,
-      easing: 'cubic-bezier(0.4, 0, 0.2, 1)',
+      easing: mode === 'morph'
+        ? 'cubic-bezier(0.33, 0, 0.15, 1)'
+        : 'cubic-bezier(0.4, 0, 0.2, 1)',
       fill: 'both',
     }
     const animations = mode === 'morph'
@@ -477,6 +652,8 @@ export class DomPresentationPlayer implements PresentationPlayer {
     await Promise.allSettled(animations.map(animation => animation.finished))
     if (generation !== this.slideTransitionGeneration) return
     previousLayer.remove()
+    for (const cleanup of this.slideTransitionCleanupHandlers.reverse()) cleanup()
+    this.slideTransitionCleanupHandlers = []
     for (const animation of animations) animation.cancel()
     this.slideTransitionAnimations = this.slideTransitionAnimations.filter(animation => !animations.includes(animation))
   }
@@ -548,30 +725,102 @@ export class DomPresentationPlayer implements PresentationPlayer {
     timing: KeyframeAnimationOptions,
   ) {
     const animations: Animation[] = []
-    const start = (node: HTMLElement, keyframes: Keyframe[]) => {
-      const animation = this.startSlideAnimation(node, keyframes, timing)
+    const start = (node: Element, keyframes: Keyframe[], customTiming: KeyframeAnimationOptions = timing) => {
+      const animation = this.startSlideAnimation(node, keyframes, customTiming)
       if (animation) animations.push(animation)
+      return animation
     }
     const result = matchMorphElements(
       createPresentationMorphCandidates(fromSlide.elements),
       createPresentationMorphCandidates(toSlide.elements),
+      toSlide.transition?.morph,
     )
     const nextBackground = nextLayer.querySelector<HTMLElement>('.pptist-player-background')
     if (nextBackground) start(nextBackground, [{ opacity: 0 }, { opacity: 1 }])
+
+    const startTextStyleMorph = (previous: HTMLElement, next: HTMLElement) => {
+      const pairs = matchingTextStylePairs(previous, next)
+      if (!pairs) return false
+      for (const [source, target] of pairs) {
+        const keyframes = visualStyleKeyframes(source, target)
+        if (keyframes) start(target, keyframes)
+      }
+      return true
+    }
+    const startShapePathMorph = (previous: HTMLElement, next: HTMLElement) => {
+      const css = next.ownerDocument.defaultView?.CSS
+      // SVG path interpolation is a Chromium capability, not part of every
+      // DOM/Web Animations implementation. Fall back to pixel crossfade when
+      // the runtime cannot explicitly confirm CSS `d: path(...)` support.
+      if (!css?.supports?.('d', 'path("M0 0L1 1")')) return false
+      const previousSvg = previous.querySelector<SVGSVGElement>('svg')
+      const nextSvg = next.querySelector<SVGSVGElement>('svg')
+      if (!previousSvg || !nextSvg || previousSvg.getAttribute('viewBox') !== nextSvg.getAttribute('viewBox')) return false
+      const previousPaths = Array.from(previousSvg.querySelectorAll<SVGPathElement>('path'))
+      const nextPaths = Array.from(nextSvg.querySelectorAll<SVGPathElement>('path'))
+      if (!previousPaths.length || previousPaths.length !== nextPaths.length) return false
+      const keyframeSets = nextPaths.map((path, index) => pathMorphKeyframes(previousPaths[index], path))
+      if (keyframeSets.some(keyframes => !keyframes)) return false
+      for (let index = 0; index < nextPaths.length; index++) start(nextPaths[index], keyframeSets[index]!)
+      const previousContent = previous.firstElementChild
+      const nextContent = next.firstElementChild
+      const contentKeyframes = previousContent && nextContent
+        ? visualStyleKeyframes(previousContent, nextContent)
+        : undefined
+      if (contentKeyframes && nextContent) start(nextContent, contentKeyframes)
+      return true
+    }
+    const startGranularTextMorph = (previous: HTMLElement, next: HTMLElement) => {
+      const mode = toSlide.transition?.morph?.mode
+      if (mode !== 'byWord' && mode !== 'byChar') return false
+      const prepared = prepareTextMorph(previous, next, nextLayer, mode, timing)
+      if (!prepared?.animations.length) return false
+      this.slideTransitionCleanupHandlers.push(prepared.cleanup)
+      for (const animation of prepared.animations) start(animation.node, animation.keyframes, animation.timing)
+      prepared.start?.()
+      return true
+    }
 
     for (const match of result.matches) {
       const previous = this.elementInLayer(previousLayer, match.from.id)
       const next = this.elementInLayer(nextLayer, match.to.id)
       if (!previous || !next) continue
-      const fromTransform = `translate(${match.from.left - match.to.left}px, ${match.from.top - match.to.top}px) rotate(${match.from.rotate}deg) scale(${match.from.width / match.to.width}, ${match.from.height / match.to.height})`
+      if (!presentationMorphNeedsAnimation(match.from, match.to)) {
+        // Swap identical renderings without creating a compositor layer. This
+        // prevents the start/end flash on copied-but-unchanged objects.
+        previous.style.visibility = 'hidden'
+        continue
+      }
+      const fromCenterX = match.from.left + match.from.width / 2
+      const fromCenterY = match.from.top + match.from.height / 2
+      const toCenterX = match.to.left + match.to.width / 2
+      const toCenterY = match.to.top + match.to.height / 2
+      const fromTransform = `translate(${fromCenterX - toCenterX}px, ${fromCenterY - toCenterY}px) rotate(${match.from.rotate}deg) scale(${match.from.width / match.to.width}, ${match.from.height / match.to.height})`
       const toTransform = `rotate(${match.to.rotate}deg)`
-      next.style.transformOrigin = 'top left'
-      if (presentationMorphNeedsCrossfade(match.from, match.to)) {
+      const styleMorph = ['text', 'shape'].includes(match.from.type) && ['text', 'shape'].includes(match.to.type)
+        ? startTextStyleMorph(previous, next)
+        : false
+      const granularTextMorph = ['text', 'shape'].includes(match.from.type) && ['text', 'shape'].includes(match.to.type)
+        ? startGranularTextMorph(previous, next)
+        : false
+      const pathMorph = match.from.type === 'shape' && match.to.type === 'shape'
+        ? startShapePathMorph(previous, next)
+        : false
+      if (pathMorph || (match.from.type === 'text' && (styleMorph || granularTextMorph))) {
+        previous.style.visibility = 'hidden'
+        start(next, [{ transform: fromTransform, opacity: 1 }, { transform: toTransform, opacity: 1 }])
+      }
+      else if (presentationMorphNeedsCrossfade(match.from, match.to)) {
         const previousTransform = `rotate(${match.from.rotate}deg)`
-        const previousEnd = `translate(${match.to.left - match.from.left}px, ${match.to.top - match.from.top}px) rotate(${match.to.rotate}deg) scale(${match.to.width / match.from.width}, ${match.to.height / match.from.height})`
-        previous.style.transformOrigin = 'top left'
-        start(previous, [{ transform: previousTransform, opacity: 1 }, { transform: previousEnd, opacity: 0 }])
-        start(next, [{ transform: fromTransform, opacity: 0 }, { transform: toTransform, opacity: 1 }])
+        const previousEnd = `translate(${toCenterX - fromCenterX}px, ${toCenterY - fromCenterY}px) rotate(${match.to.rotate}deg) scale(${match.to.width / match.from.width}, ${match.to.height / match.from.height})`
+        start(previous, [
+          { transform: previousTransform, opacity: 1, filter: 'blur(0)', easing: 'linear', offset: 0 },
+          { transform: previousEnd, opacity: 0, filter: 'blur(.55px)', easing: 'linear', offset: 1 },
+        ])
+        start(next, [
+          { transform: fromTransform, opacity: 0, filter: 'blur(.55px)', easing: 'linear', offset: 0 },
+          { transform: toTransform, opacity: 1, filter: 'blur(0)', easing: 'linear', offset: 1 },
+        ])
       }
       else {
         previous.style.visibility = 'hidden'
@@ -733,8 +982,7 @@ export class DomPresentationPlayer implements PresentationPlayer {
     if (this.wheelGestureConsumed || Math.abs(this.wheelDelta) < threshold) return
     this.wheelGestureConsumed = true
     this.wheelDelta = 0
-    if (direction > 0) void this.next()
-    else void this.previous()
+    this.finishOrAdvanceWheelStep(direction)
   }
 }
 
