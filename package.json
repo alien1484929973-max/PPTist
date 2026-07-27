@@ -18,6 +18,7 @@
     "type-check": "vue-tsc --build --force",
     "test:core": "node --import tsx --test packages/presentation-core/test/*.test.ts",
     "test:player": "npm run test --workspace pptist-presentation-player",
+    "check:docs": "node scripts/check-doc-links.mjs",
     "build:player": "npm run build --workspace pptist-presentation-player",
     "pack:player": "node scripts/pack-player.mjs",
     "verify:player-package": "npm run build:player && npm run verify --workspace pptist-presentation-player && npm run verify:consumer --workspace pptist-presentation-player",

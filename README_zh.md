@@ -15,7 +15,7 @@
 # 🎨 PPTist
 **PowerPoint-ist（/'pauəpɔintist/）**，一个基于 Web 的在线演示文稿（幻灯片）应用，还原了大部分 Office PowerPoint 常用功能，支持 文字、图片、形状、线条、图表、表格、视频、音频、公式 几种最常用的元素类型，可以在 Web 浏览器中编辑/演示幻灯片。
 
-> 当前 Fork 增加了单用户登录、SQLite 云文稿库、多文稿管理、自动保存和版本冲突保护。部署与数据结构说明见 [云文稿功能](./doc/CloudStorage.md)。
+> 当前 Fork 增加了单用户登录、PostgreSQL 云文稿库、多文稿管理、手动保存、版本冲突保护、媒体上传代理和独立播放器。工程入口见 [开发文档](./docs/README.md)，部署与数据结构说明见 [云文稿功能](./doc/CloudStorage.md)。
 
 **在线体验地址👉：[https://pipipi-pikachu.github.io/PPTist/](https://pipipi-pikachu.github.io/PPTist/)**
 
@@ -193,11 +193,16 @@ npm run dev
 
 
 # 🎯 开发
-目前没有完整的开发文档，但下面这些文档可能会对你有一些帮助：
+完整工程说明从 [工程文档导航](/docs/README.md) 和
+[开发指南](/docs/development-guide.md) 开始。AI 工具还应先读取仓库根目录的
+[`AGENTS.md`](/AGENTS.md)。专题文档包括：
+
 - [项目目录与数据结构](/doc/DirectoryAndData.md)
 - [画布与元素的基本原理](/doc/Canvas.md)
 - [如何自定义一个元素](/doc/CustomElement.md)
-- [关于AIPPT](/doc/AIPPT.md)
+- [关于 AIPPT](/doc/AIPPT.md)
+- [播放器架构与交付契约](/docs/presentation-player-architecture.md)
+- [统一生产部署](/DEPLOYMENT.md)
 
 下面是一些辅助开发的工具/仓库：
 - 导入PPTX文件参考：[pptxtojson](https://github.com/pipipi-pikachu/pptxtojson)

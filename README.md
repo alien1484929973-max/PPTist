@@ -15,7 +15,7 @@
 # 🎨 PPTist
 **PowerPoint-ist（/'pauəpɔintist/）**, A web-based presentation (slideshow) application. This application replicates most of the commonly used features of Microsoft Office PowerPoint. It supports various essential element types such as text, images, shapes, lines, charts, tables, videos, audio, and formulas. You can edit and present slides directly in a web browser.
 
-> This fork adds single-user authentication, a SQLite-backed cloud document library, multi-document management, autosave, and revision conflict protection. See [Cloud Storage](./doc/CloudStorage.md) for deployment and data-model details.
+> This fork adds single-user authentication, PostgreSQL cloud documents, multi-document management, explicit saves, revision conflict protection, a media upload proxy, and a standalone player. Start with the [engineering docs](./docs/README.md); see [Cloud Storage](./doc/CloudStorage.md) for data-model details.
 
 **Try it online👉：[https://pipipi-pikachu.github.io/PPTist/](https://pipipi-pikachu.github.io/PPTist/)**
 
@@ -198,12 +198,17 @@ Browser access: http://127.0.0.1:5173/
 Some common problems: [FAQ](/doc/Q&A.md)
 
 
-# 🎯 Supplement
-There is currently no complete development documentation, but the following documents may be of some help to you:
+# 🎯 Development
+Start with the [engineering documentation index](/docs/README.md) and the
+[development guide](/docs/development-guide.md). AI tools should also read the root
+[`AGENTS.md`](/AGENTS.md). Related topic documents include:
+
 - [Project Directory and Data Structure](/doc/DirectoryAndData.md)
 - [Fundamentals of Canvas and Elements](/doc/Canvas.md)
 - [How to Customize an Element](/doc/CustomElement.md)
 - [About AIPPT](/doc/AIPPT.md)
+- [Player Architecture and Delivery Contract](/docs/presentation-player-architecture.md)
+- [Unified Production Deployment](/DEPLOYMENT.md)
 
 Here are some auxiliary development tools/repositories:
 - Import PPTX file reference: [pptxtojson](https://github.com/pipipi-pikachu/pptxtojson)
