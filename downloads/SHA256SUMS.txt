@@ -1,1 +1,1 @@
-6b8238c79cf709738541863e93158cf605fda8a137a2551bf1f8142025417d02  pptist-presentation-player-0.1.0.tgz
+fd68d52881414c54c0d72290c835dd90dd7b043beedf34016da6f12a5122e2c3  pptist-presentation-player-0.1.0.tgz
