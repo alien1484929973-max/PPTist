@@ -131,6 +131,63 @@ test('Morph keeps the target shape path and cleans segmented text after playback
   await window.happyDOM.abort()
 })
 
+test('shape path Morph leaves unchanged embedded text off the compositor', async () => {
+  const { window, host } = installDom()
+  const animatedNodes: Element[] = []
+  Object.defineProperty(window, 'CSS', {
+    configurable: true,
+    value: { supports: () => true },
+  })
+  Object.defineProperty(window.Element.prototype, 'animate', {
+    configurable: true,
+    value(this: Element) {
+      animatedNodes.push(this)
+      return { finished: Promise.resolve(), cancel() {} } as unknown as Animation
+    },
+  })
+  const { createPresentationPlayer } = await import('../src/index')
+  const shape = (id: string, path: string, fill: string) => ({
+    id,
+    morphKey: 'stable-shape',
+    type: 'shape',
+    left: 120,
+    top: 80,
+    width: 280,
+    height: 140,
+    rotate: 0,
+    viewBox: [280, 140] as [number, number],
+    path,
+    fill,
+    text: {
+      content: '<p>保持稳定</p>',
+      defaultFontName: 'Arial',
+      defaultColor: '#222222',
+      align: 'middle' as const,
+    },
+  })
+  const player = createPresentationPlayer(host, {
+    width: 1000,
+    height: 562.5,
+    slides: [
+      { id: 'one', elements: [shape('shape-from', 'M0 0L280 0L280 140Z', '#4472c4')] },
+      {
+        id: 'two',
+        transition: { type: 'morph', duration: 1, morph: { mode: 'byObject' } },
+        elements: [shape('shape-to', 'M0 12L268 0L280 140Z', '#70ad47')],
+      },
+    ],
+  })
+
+  await player.next()
+  const targetAnimations = animatedNodes.filter(node => (
+    node as HTMLElement
+  ).closest?.('[data-pptist-element-id="shape-to"]'))
+  assert.ok(targetAnimations.some(node => node.tagName.toLowerCase() === 'path'))
+  assert.equal(targetAnimations.every(node => node.tagName.toLowerCase() === 'path'), true)
+  player.destroy()
+  await window.happyDOM.abort()
+})
+
 test('first slide animation follows the slide-transition start rule', async () => {
   const { window, host } = installDom()
   const { createPresentationPlayer } = await import('../src/index')

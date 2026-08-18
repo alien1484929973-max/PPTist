@@ -155,6 +155,15 @@ const rotationDiffers = (from: number, to: number) => {
   return Math.abs(delta) > 0.001
 }
 
+export const presentationMorphGeometryDiffers = (
+  from: PresentationMorphCandidate,
+  to: PresentationMorphCandidate,
+) => geometryDiffers(from.left, to.left) ||
+  geometryDiffers(from.top, to.top) ||
+  geometryDiffers(from.width, to.width) ||
+  geometryDiffers(from.height, to.height) ||
+  rotationDiffers(from.rotate, to.rotate)
+
 /**
  * Whether a matched object needs any visual animation at all. Keeping a truly
  * unchanged object off the Web Animations compositor avoids the sub-pixel
@@ -164,11 +173,7 @@ export const presentationMorphNeedsAnimation = (
   from: PresentationMorphCandidate,
   to: PresentationMorphCandidate,
 ) => presentationMorphNeedsCrossfade(from, to) ||
-  geometryDiffers(from.left, to.left) ||
-  geometryDiffers(from.top, to.top) ||
-  geometryDiffers(from.width, to.width) ||
-  geometryDiffers(from.height, to.height) ||
-  rotationDiffers(from.rotate, to.rotate)
+  presentationMorphGeometryDiffers(from, to)
 
 const normalizeName = (name?: string) => name?.trim().toLocaleLowerCase() || ''
 const forcedMorphName = (element: MorphableElement) => {

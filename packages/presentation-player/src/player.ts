@@ -4,6 +4,7 @@ import {
   createPresentationMorphCandidates,
   createAnimationPlan,
   matchMorphElements,
+  presentationMorphGeometryDiffers,
   presentationMorphNeedsAnimation,
   presentationMorphNeedsCrossfade,
   resolveDomAnimationTargets,
@@ -145,7 +146,7 @@ const visualStyleKeyframes = (from: Element, to: Element): [Keyframe, Keyframe] 
   if (!view) return undefined
   const source = view.getComputedStyle(from)
   const target = view.getComputedStyle(to)
-  const snapshot = (style: CSSStyleDeclaration): Keyframe => ({
+  const snapshot = (style: CSSStyleDeclaration) => ({
     color: style.color,
     backgroundColor: style.backgroundColor,
     borderColor: style.borderColor,
@@ -159,7 +160,11 @@ const visualStyleKeyframes = (from: Element, to: Element): [Keyframe, Keyframe] 
     filter: style.filter,
     opacity: style.opacity,
   })
-  return [snapshot(source), snapshot(target)]
+  const sourceSnapshot = snapshot(source)
+  const targetSnapshot = snapshot(target)
+  const properties = Object.keys(sourceSnapshot) as Array<keyof typeof sourceSnapshot>
+  if (properties.every(property => sourceSnapshot[property] === targetSnapshot[property])) return undefined
+  return [sourceSnapshot, targetSnapshot]
 }
 
 const matchingTextStylePairs = (fromRoot: Element, toRoot: Element) => {
@@ -797,6 +802,7 @@ export class DomPresentationPlayer implements PresentationPlayer {
       const toCenterY = match.to.top + match.to.height / 2
       const fromTransform = `translate(${fromCenterX - toCenterX}px, ${fromCenterY - toCenterY}px) rotate(${match.from.rotate}deg) scale(${match.from.width / match.to.width}, ${match.from.height / match.to.height})`
       const toTransform = `rotate(${match.to.rotate}deg)`
+      const geometryMorph = presentationMorphGeometryDiffers(match.from, match.to)
       const styleMorph = ['text', 'shape'].includes(match.from.type) && ['text', 'shape'].includes(match.to.type)
         ? startTextStyleMorph(previous, next)
         : false
@@ -808,7 +814,7 @@ export class DomPresentationPlayer implements PresentationPlayer {
         : false
       if (pathMorph || (match.from.type === 'text' && (styleMorph || granularTextMorph))) {
         previous.style.visibility = 'hidden'
-        start(next, [{ transform: fromTransform, opacity: 1 }, { transform: toTransform, opacity: 1 }])
+        if (geometryMorph) start(next, [{ transform: fromTransform, opacity: 1 }, { transform: toTransform, opacity: 1 }])
       }
       else if (presentationMorphNeedsCrossfade(match.from, match.to)) {
         const previousTransform = `rotate(${match.from.rotate}deg)`

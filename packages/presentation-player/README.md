@@ -2,20 +2,20 @@
 
 PPTist 的框架无关浏览器播放器。运行时只使用普通 DOM、TypeScript、Web Animations API 和内置的 ECharts SVG 图表适配层，不依赖 Vue，也不需要 iframe。
 
-当前版本：`0.1.0`。该稳定版在 PPTist 自身的桌面放映、演讲者视图、观众窗口和移动播放路径中实际调用；编辑器也从包的 `exports` 加载构建后的 `dist`，不再使用旧 Vue 播放回退。
+当前版本：`0.1.1`。该稳定版在 PPTist 自身的桌面放映、演讲者视图、观众窗口和移动播放路径中实际调用；编辑器也从包的 `exports` 加载构建后的 `dist`，不再使用旧 Vue 播放回退。
 
 ## 安装
 
 从 npm 官方注册表安装：
 
 ```bash
-npm install pptist-presentation-player@0.1.0
+npm install pptist-presentation-player@0.1.1
 ```
 
 也可以从官网下载离线包，校验 `SHA256SUMS.txt` 后从本地安装：
 
 ```bash
-npm install ./pptist-presentation-player-0.1.0.tgz
+npm install ./pptist-presentation-player-0.1.1.tgz
 ```
 
 ## 使用

@@ -272,7 +272,8 @@ Morph 配置属于目标页的 `Slide.transition.morph`，表示“从上一页�
 播放器使用对象几何变换、交叉淡化和文字 Morph。`byWord` / `byChar` 模式由
 `packages/presentation-player/src/textMorph.ts` 进行分词、匹配和光流画布过渡。完全未变化的
 匹配对象通过 `presentationMorphNeedsAnimation()` 跳过合成动画，避免开始/结束时重新栅格化
-造成闪烁或位移。
+造成闪烁或位移。形状路径单独插值时，只有几何确实变化才动画化形状根节点；未变化的内嵌文字
+和相同计算样式不得创建空动画，以免浏览器重复栅格化字形造成抖动。
 
 修改 Morph 时至少运行 core Morph 测试、player 文本 Morph/DOM 测试，并在真实浏览器中验证：
 

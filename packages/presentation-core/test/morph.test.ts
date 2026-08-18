@@ -4,6 +4,7 @@ import {
   createPresentationMorphCandidates,
   matchMorphElements,
   presentationMorphKeyForCopy,
+  presentationMorphGeometryDiffers,
   presentationMorphNeedsAnimation,
   type MorphableElement,
 } from '../src/index'
@@ -205,4 +206,6 @@ test('Morph keeps visually unchanged matched objects off the animation composito
   assert.equal(presentationMorphNeedsAnimation(candidate('from'), candidate('to')), false)
   assert.equal(presentationMorphNeedsAnimation(candidate('from'), candidate('to', { top: 21 })), true)
   assert.equal(presentationMorphNeedsAnimation(candidate('from'), candidate('to', { fill: '#ed7d31' })), true)
+  assert.equal(presentationMorphGeometryDiffers(candidate('from'), candidate('to', { fill: '#ed7d31' })), false)
+  assert.equal(presentationMorphGeometryDiffers(candidate('from'), candidate('to', { top: 21 })), true)
 })
