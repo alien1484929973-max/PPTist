@@ -72,9 +72,7 @@
         searchLabel="搜索字号"
         autofocus
         @update:value="value => updateFontStyle('fontsize', value as string)"
-        :options="fontSizeOptions.map(item => ({
-          label: item, value: item
-        }))"
+        :options="FONT_SIZE_OPTIONS"
       >
         <template #icon>
           <i-icon-park-outline:add-text />
@@ -138,7 +136,7 @@ import { storeToRefs } from 'pinia'
 import { useMainStore, useSlidesStore } from '@/store'
 import type { LineStyleType, PPTElement, PPTElementOutline, TableCell } from '@/types/slides'
 import emitter, { EmitterEvents } from '@/utils/emitter'
-import { FONTS } from '@/configs/font'
+import { FONTS, FONT_SIZE_OPTIONS } from '@/configs/font'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 
 import SVGLine from './common/SVGLine.vue'
@@ -167,12 +165,6 @@ const updateElement = (id: string, props: Partial<PPTElement>) => {
 }
 
 const lineStyleOptions = ref<LineStyleType[]>(['solid', 'dashed', 'dotted'])
-const fontSizeOptions = [
-  '12px', '14px', '16px', '18px', '20px', '22px', '24px', '28px', '32px',
-  '36px', '40px', '44px', '48px', '54px', '60px', '66px', '72px', '76px',
-  '80px', '88px', '96px', '104px', '112px', '120px',
-]
-
 const fill = ref('#fff')
 const outline = ref<PPTElementOutline>({
   width: 0,

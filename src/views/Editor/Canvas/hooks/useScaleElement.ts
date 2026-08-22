@@ -6,6 +6,12 @@ import { OperateResizeHandlers, type AlignmentLineProps, type MultiSelectRange }
 import { MIN_SIZE } from '@/configs/element'
 import { SHAPE_PATH_FORMULAS } from '@/configs/shapes'
 import { type AlignLine, uniqAlignLines } from '@/utils/element'
+import {
+  createAlignmentGuide,
+  findClosestAlignment,
+  getAlignmentGuidePadding,
+  getAlignmentThreshold,
+} from '@/utils/alignment'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 import { cloneEditorElements } from '@/utils/editorElement'
 
@@ -242,38 +248,44 @@ export default (
     // 将收集到的对齐吸附线与计算的目标元素当前的位置大小相关数据做对比，差值小于设定的值时执行自动缩放校正
     // 水平和垂直两个方向需要分开计算
     const alignedAdsorption = (currentX: number | null, currentY: number | null) => {
-      const sorptionRange = 5
-
       const _alignmentLines: AlignmentLineProps[] = []
-      let isVerticalAdsorbed = false
-      let isHorizontalAdsorbed = false
       const correctionVal = { offsetX: 0, offsetY: 0 }
-      
-      if (currentY || currentY === 0) {
-        for (let i = 0; i < horizontalLines.length; i++) {
-          const { value, range } = horizontalLines[i]
-          const min = Math.min(...range, currentX || 0)
-          const max = Math.max(...range, currentX || 0)
-          
-          if (Math.abs(currentY - value) < sorptionRange && !isHorizontalAdsorbed) {
-            correctionVal.offsetY = currentY - value
-            isHorizontalAdsorbed = true
-            _alignmentLines.push({ type: 'horizontal', axis: {x: min - 50, y: value}, length: max - min + 100 })
-          }
-        }
-      }
-      if (currentX || currentX === 0) {
-        for (let i = 0; i < verticalLines.length; i++) {
-          const { value, range } = verticalLines[i]
-          const min = Math.min(...range, (currentY || 0))
-          const max = Math.max(...range, (currentY || 0))
 
-          if (Math.abs(currentX - value) < sorptionRange && !isVerticalAdsorbed) {
-            correctionVal.offsetX = currentX - value
-            isVerticalAdsorbed = true
-            _alignmentLines.push({ type: 'vertical', axis: {x: value, y: min - 50}, length: max - min + 100 })
-          }
-        }
+      const threshold = getAlignmentThreshold(canvasScale.value)
+      const guidePadding = getAlignmentGuidePadding(canvasScale.value)
+      const pointX = currentX ?? 0
+      const pointY = currentY ?? 0
+      const horizontalMatch = currentY === null ? null : findClosestAlignment(
+        horizontalLines,
+        [{ value: currentY, range: [pointX, pointX] }],
+        threshold,
+      )
+      const verticalMatch = currentX === null ? null : findClosestAlignment(
+        verticalLines,
+        [{ value: currentX, range: [pointY, pointY] }],
+        threshold,
+      )
+
+      if (horizontalMatch) correctionVal.offsetY = horizontalMatch.offset
+      if (verticalMatch) correctionVal.offsetX = verticalMatch.offset
+
+      if (horizontalMatch) {
+        _alignmentLines.push(createAlignmentGuide('horizontal', {
+          ...horizontalMatch,
+          anchor: {
+            ...horizontalMatch.anchor,
+            range: [pointX - correctionVal.offsetX, pointX - correctionVal.offsetX],
+          },
+        }, guidePadding))
+      }
+      if (verticalMatch) {
+        _alignmentLines.push(createAlignmentGuide('vertical', {
+          ...verticalMatch,
+          anchor: {
+            ...verticalMatch.anchor,
+            range: [pointY - correctionVal.offsetY, pointY - correctionVal.offsetY],
+          },
+        }, guidePadding))
       }
       alignmentLines.value = _alignmentLines
       return correctionVal

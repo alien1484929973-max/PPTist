@@ -50,6 +50,8 @@ CRUD、revision 冲突保护、媒体凭据管理和媒体流式上传代理。
 - `PPTIST_MEDIA_PUBLIC_BASE`：媒体公开访问源，例如 `https://media.example.com`。
 - `PPTIST_MEDIA_MAX_IMAGE_BYTES`、`PPTIST_MEDIA_MAX_SVG_BYTES`、
   `PPTIST_MEDIA_MAX_AUDIO_BYTES`、`PPTIST_MEDIA_MAX_VIDEO_BYTES`：各媒体类型上传上限。
+- `PPTIST_EXPORT_IMAGE_MAX_BYTES`：PPTX 导出时单张外链图片的下载上限，默认 25 MiB。
+- `PPTIST_EXPORT_IMAGE_TIMEOUT_MS`：PPTX 导出时外链图片的下载超时，默认 15000 毫秒。
 
 API Key 由登录用户在文稿管理器中绑定。浏览器不会收到已保存的明文；服务端验证后使用
 AES-256-GCM 加密，只把密文写入 PostgreSQL。凭据密钥丢失后，需要重新绑定 API Key。
@@ -69,14 +71,17 @@ AES-256-GCM 加密，只把密文写入 PostgreSQL。凭据密钥丢失后，需
 - `POST /api/cloud/auth/login`
 - `POST /api/cloud/auth/logout`
 - `GET /api/cloud/auth/me`
+- `GET /api/cloud/export/image?source=...`
 - `GET|PUT|DELETE /api/cloud/media/settings`
 - `GET|POST /api/cloud/documents`
 - `GET|PUT|PATCH|DELETE /api/cloud/documents/{id}`
 - `POST /api/cloud/documents/{id}/duplicate`
 - `PUT /api/cloud/documents/{id}/media`
 
-写请求会校验 `Origin`。生产反向代理应保留正确的 Origin、客户端 IP，并为媒体上传设置合适
-的请求体上限、关闭请求体缓冲、增加读写超时。
+写请求会校验 `Origin`。外链图片下载接口要求登录，且只访问经 DNS 校验的公网 HTTP(S)
+图片，禁止本机、内网、保留地址和非常用端口，并限制重定向、响应大小和超时。生产反向代理
+应保留正确的 Origin、客户端 IP，并为媒体上传设置合适的请求体上限、关闭请求体缓冲、增加
+读写超时。
 
 ## 安全约束
 

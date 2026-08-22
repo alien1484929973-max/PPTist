@@ -30,6 +30,7 @@ const sizeStyle = computed(() => {
 .alignment-line {
   position: absolute;
   z-index: 100;
+  pointer-events: none;
 
   .line {
     width: 0;
@@ -37,11 +38,11 @@ const sizeStyle = computed(() => {
     border: 0 dashed $themeColor;
 
     &.vertical {
-      transform: translateY(-0.5px);
+      transform: translateX(-0.5px);
       border-left-width: 1px;
     }
     &.horizontal {
-      transform: translateX(-0.5px);
+      transform: translateY(-0.5px);
       border-top-width: 1px;
     }
   }

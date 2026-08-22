@@ -9,6 +9,7 @@ import {
   saveMediaCredential,
   uploadDocumentMedia,
 } from './media.mjs'
+import { downloadExportImage } from './export-image.mjs'
 import { verifyPassword } from './password.mjs'
 
 const host = process.env.PPTIST_CLOUD_HOST || '127.0.0.1'
@@ -182,6 +183,20 @@ const handleRequest = async (req, res) => {
     const user = await requireUser(req, res)
     if (!user) return
     return sendJson(res, 200, { user })
+  }
+
+  if (method === 'GET' && path === '/api/cloud/export/image') {
+    const user = await requireUser(req, res)
+    if (!user) return
+    const image = await downloadExportImage(url.searchParams.get('source'))
+    res.writeHead(200, {
+      'Content-Type': image.contentType,
+      'Content-Length': image.body.length,
+      'Cache-Control': 'private, no-store',
+      'X-Content-Type-Options': 'nosniff',
+    })
+    res.end(image.body)
+    return
   }
 
   if (path === '/api/cloud/media/settings') {

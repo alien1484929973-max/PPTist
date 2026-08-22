@@ -28,6 +28,7 @@ import useOrderElement from '@/hooks/useOrderElement'
 import useAlignElementToCanvas from '@/hooks/useAlignElementToCanvas'
 import useCopyAndPasteElement from '@/hooks/useCopyAndPasteElement'
 import useSelectElement from '@/hooks/useSelectElement'
+import useSetImageAsBackground from '@/hooks/useSetImageAsBackground'
 
 import { ElementOrderCommands, ElementAlignCommands } from '@/types/edit'
 
@@ -71,6 +72,12 @@ const { deleteElement } = useDeleteElement()
 const { lockElement, unlockElement } = useLockElement()
 const { copyElement, pasteElement, cutElement } = useCopyAndPasteElement()
 const { selectAllElements } = useSelectElement()
+const { setImageAsBackground } = useSetImageAsBackground()
+
+const handleSetImageAsBackground = () => {
+  if (props.elementInfo.type !== 'image') return
+  setImageAsBackground(props.elementInfo)
+}
 
 const contextmenus = (): ContextmenuItem[] => {
   if (props.elementInfo.lock) {
@@ -135,6 +142,11 @@ const contextmenus = (): ContextmenuItem[] => {
         { text: '置于底层', handler: () => orderElement(props.elementInfo, ElementOrderCommands.BOTTOM) },
         { text: '下移一层', handler: () => orderElement(props.elementInfo, ElementOrderCommands.DOWN) },
       ],
+    },
+    {
+      text: '设为页面背景',
+      handler: handleSetImageAsBackground,
+      hide: props.elementInfo.type !== 'image',
     },
     { divider: true },
     {

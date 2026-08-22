@@ -64,7 +64,7 @@
       <Button class="full-width-btn"><i-icon-park-outline:transform /> 替换图片</Button>
     </FileInput>
     <Button class="full-width-btn" @click="resetImage()"><i-icon-park-outline:undo /> 重置样式</Button>
-    <Button class="full-width-btn" @click="setBackgroundImage()"><i-icon-park-outline:theme /> 设为背景</Button>
+    <Button class="full-width-btn" @click="setBackgroundImage()"><i-icon-park-outline:theme /> 设为页面背景</Button>
   </div>
 </template>
 
@@ -72,10 +72,11 @@
 import { type Ref, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useMainStore, useSlidesStore } from '@/store'
-import type { PPTImageElement, SlideBackground } from '@/types/slides'
+import type { PPTImageElement } from '@/types/slides'
 import { CLIPPATHS } from '@/configs/imageClip'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 import useImageHandler from '@/hooks/useImageHandler'
+import useSetImageAsBackground from '@/hooks/useSetImageAsBackground'
 
 import ElementOutline from '../common/ElementOutline.vue'
 import ElementShadow from '../common/ElementShadow.vue'
@@ -126,7 +127,6 @@ const ratioClipOptions = [
 const mainStore = useMainStore()
 const slidesStore = useSlidesStore()
 const { handleElement, handleElementId } = storeToRefs(mainStore)
-const { currentSlide } = storeToRefs(slidesStore)
 
 const handleImageElement = handleElement as Ref<PPTImageElement>
 
@@ -134,6 +134,7 @@ const clipPanelVisible = ref(false)
 
 const { addHistorySnapshot } = useHistorySnapshot()
 const { replaceImage } = useImageHandler()
+const { setImageAsBackground } = useSetImageAsBackground()
 
 // 打开自由裁剪
 const clipImage = () => {
@@ -247,18 +248,7 @@ const resetImage = () => {
 
 // 将图片设置为背景
 const setBackgroundImage = () => {
-  const _handleElement = handleElement.value as PPTImageElement
-
-  const background: SlideBackground = {
-    ...currentSlide.value.background,
-    type: 'image',
-    image: {
-      src: _handleElement.src,
-      size: 'cover'
-    },
-  }
-  slidesStore.updateSlide({ background })
-  addHistorySnapshot()
+  setImageAsBackground(handleImageElement.value)
 }
 </script>
 

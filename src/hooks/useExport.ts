@@ -12,6 +12,7 @@ import { type AST, toAST } from '@/utils/htmlParser'
 import { type SvgPoints, toPoints } from '@/utils/svgPathParser'
 import { encrypt } from '@/utils/crypto'
 import { svg2Base64 } from '@/utils/svg2Base64'
+import { ExportImageDownloadError, preloadExportImages } from '@/utils/exportImage'
 import message from '@/utils/message'
 import { serializePresentation } from '@/utils/presentation'
 
@@ -467,19 +468,39 @@ export default () => {
     return null
   }
 
-  // 判断是否为Base64图片地址
-  const isBase64Image = (url: string) => {
-    const regex = /^data:image\/[^;]+;base64,/
-    return url.match(regex) !== null
+  // 判断是否为SVG图片地址
+  const isSVGImage = (url: string) => /^data:image\/svg\+xml(?:;[^,]*)?,/i.test(url)
+
+  const collectExportImageSources = (_slides: Slide[], ignoreMedia: boolean) => {
+    const sources: string[] = []
+    for (const slide of _slides) {
+      if (slide.background?.type === 'image' && slide.background.image?.src) {
+        sources.push(slide.background.image.src)
+      }
+      for (const element of slide.elements || []) {
+        if (element.type === 'image') sources.push(element.src)
+        else if (element.type === 'shape' && element.pattern) sources.push(element.pattern)
+        else if (!ignoreMedia && element.type === 'video' && element.poster) sources.push(element.poster)
+      }
+    }
+    return sources
   }
 
-  // 判断是否为SVG图片地址
-  const isSVGBase64Image = (url: string) => /^data:image\/svg\+xml;base64,/i.test(url)
-  const isSVGUrl = (url: string) => /\.svg(?:[?#].*)?$/i.test(url)
+  const exportImageErrorMessage = (error: unknown) => {
+    if (!(error instanceof ExportImageDownloadError)) return '导出失败'
+    try {
+      const url = new URL(error.source, window.location.href)
+      return `图片下载失败：${url.host}${url.pathname}`
+    }
+    catch {
+      return `图片下载失败：${error.source.slice(0, 100)}`
+    }
+  }
 
   // 导出PPTX文件
-  const exportPPTX = (_slides: Slide[], masterOverwrite: boolean, ignoreMedia: boolean) => {
-    exporting.value = true
+  const buildPPTX = async (_slides: Slide[], masterOverwrite: boolean, ignoreMedia: boolean) => {
+    const exportImages = await preloadExportImages(collectExportImageSources(_slides, ignoreMedia))
+    const getExportImage = (source: string) => exportImages.get(source) || source
     const pptx = new pptxgen()
     setPPTXLayout(pptx)
 
@@ -497,30 +518,17 @@ export default () => {
       if (slide.background) {
         const background = slide.background
         if (background.type === 'image' && background.image) {
-          if (isSVGBase64Image(background.image.src)) {
+          const data = getExportImage(background.image.src)
+          if (isSVGImage(data)) {
             pptxSlide.addImage({
-              data: background.image.src,
+              data,
               x: 0,
               y: 0,
               w: viewportSize.value / ratioPx2Inch.value,
               h: viewportSize.value * viewportRatio.value / ratioPx2Inch.value,
             })
           }
-          else if (isSVGUrl(background.image.src)) {
-            pptxSlide.addImage({
-              path: background.image.src,
-              x: 0,
-              y: 0,
-              w: viewportSize.value / ratioPx2Inch.value,
-              h: viewportSize.value * viewportRatio.value / ratioPx2Inch.value,
-            })
-          }
-          else if (isBase64Image(background.image.src)) {
-            pptxSlide.background = { data: background.image.src }
-          }
-          else {
-            pptxSlide.background = { path: background.image.src }
-          }
+          else pptxSlide.background = { data }
         }
         else if (background.type === 'solid' && background.color) {
           const c = formatColor(background.color)
@@ -588,13 +596,12 @@ export default () => {
 
         else if (el.type === 'image') {
           const options: pptxgen.ImageProps = {
+            data: getExportImage(el.src),
             x: el.left / ratioPx2Inch.value,
             y: el.top / ratioPx2Inch.value,
             w: el.width / ratioPx2Inch.value,
             h: el.height / ratioPx2Inch.value,
           }
-          if (isBase64Image(el.src)) options.data = el.src
-          else options.path = el.src
 
           if (el.flipH) options.flipH = el.flipH
           if (el.flipV) options.flipV = el.flipV
@@ -719,13 +726,12 @@ export default () => {
           }
           if (el.pattern) {
             const options: pptxgen.ImageProps = {
+              data: getExportImage(el.pattern),
               x: el.left / ratioPx2Inch.value,
               y: el.top / ratioPx2Inch.value,
               w: el.width / ratioPx2Inch.value,
               h: el.height / ratioPx2Inch.value,
             }
-            if (isBase64Image(el.pattern)) options.data = el.pattern
-            else options.path = el.pattern
   
             if (el.flipH) options.flipH = el.flipH
             if (el.flipV) options.flipV = el.flipV
@@ -981,7 +987,7 @@ export default () => {
             path: el.src,
             type: el.type,
           }
-          if (el.type === 'video' && el.poster) options.cover = el.poster
+          if (el.type === 'video' && el.poster) options.cover = getExportImage(el.poster)
 
           const extMatch = el.src.match(/\.([a-zA-Z0-9]+)(?:[\?#]|$)/)
           if (extMatch && extMatch[1]) options.extn = extMatch[1]
@@ -996,12 +1002,15 @@ export default () => {
       }
     }
 
-    setTimeout(() => {
-      pptx.writeFile({ fileName: `${title.value}.pptx` }).then(() => exporting.value = false).catch(() => {
-        exporting.value = false
-        message.error('导出失败')
-      })
-    }, 200)
+    await new Promise(resolve => setTimeout(resolve, 200))
+    await pptx.writeFile({ fileName: `${title.value}.pptx` })
+  }
+
+  const exportPPTX = (_slides: Slide[], masterOverwrite: boolean, ignoreMedia: boolean) => {
+    exporting.value = true
+    buildPPTX(_slides, masterOverwrite, ignoreMedia)
+      .catch(error => message.error(exportImageErrorMessage(error)))
+      .finally(() => exporting.value = false)
   }
 
   return {

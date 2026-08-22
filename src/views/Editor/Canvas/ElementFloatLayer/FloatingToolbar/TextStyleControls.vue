@@ -13,7 +13,7 @@
     search
     searchLabel="搜索字号"
     @update:value="value => emitRichTextCommand('fontsize', value as string)"
-    :options="fontSizeOptions.map(item => ({ label: item, value: item }))"
+    :options="FONT_SIZE_OPTIONS"
   />
 
   <div class="divider"></div>
@@ -79,7 +79,7 @@
 import tinycolor from 'tinycolor2'
 import { storeToRefs } from 'pinia'
 import { useMainStore } from '@/store'
-import { FONTS } from '@/configs/font'
+import { FONTS, FONT_SIZE_OPTIONS } from '@/configs/font'
 import emitter, { EmitterEvents } from '@/utils/emitter'
 
 import Select from '@/components/Select.vue'
@@ -87,12 +87,6 @@ import Popover from '@/components/Popover.vue'
 import ColorPicker from '@/components/ColorPicker/index.vue'
 
 const { richTextAttrs } = storeToRefs(useMainStore())
-
-const fontSizeOptions = [
-  '12px', '14px', '16px', '18px', '20px', '22px', '24px', '28px', '32px',
-  '36px', '40px', '44px', '48px', '54px', '60px', '66px', '72px', '76px',
-  '80px', '88px', '96px', '104px', '112px', '120px',
-]
 
 const emitRichTextCommand = (command: string, value?: string) => {
   emitter.emit(EmitterEvents.RICH_TEXT_COMMAND, { action: { command, value } })

@@ -42,3 +42,10 @@ export const FONTS = [
   { label: 'Palatino Linotype（系统）', value: 'Palatino Linotype' },
   { label: 'Garamond（系统）', value: 'Garamond' },
 ]
+
+export const MIN_FONT_SIZE = 6
+
+export const FONT_SIZE_OPTIONS = [
+  6, 7, 8, 9, 10, 11, 12, 14, 16, 18, 20, 22, 24, 28, 32,
+  36, 40, 44, 48, 54, 60, 66, 72, 76, 80, 88, 96, 104, 112, 120,
+].map(size => ({ label: `${size}px`, value: `${size}px` }))

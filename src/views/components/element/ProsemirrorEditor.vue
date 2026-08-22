@@ -25,6 +25,7 @@ import { replaceText } from '@/utils/prosemirror/commands/replaceText'
 import type { TextFormatPainterKeys } from '@/types/edit'
 import message from '@/utils/message'
 import { KEYS } from '@/configs/hotkey'
+import { MIN_FONT_SIZE } from '@/configs/font'
 
 const props = withDefaults(defineProps<{
   elementId: string
@@ -151,7 +152,7 @@ const execCommand = ({ target, action }: RichTextCommand) => {
       const step = item.value ? +item.value : 2
       autoSelectAll(editorView)
       let fontsize = getFontsize(editorView) - step
-      if (fontsize < 12) fontsize = 12
+      if (fontsize < MIN_FONT_SIZE) fontsize = MIN_FONT_SIZE
       const mark = editorView.state.schema.marks.fontsize.create({ fontsize: fontsize + 'px' })
       addMark(editorView, mark)
       setListStyle(editorView, { key: 'fontsize', value: fontsize + 'px' })

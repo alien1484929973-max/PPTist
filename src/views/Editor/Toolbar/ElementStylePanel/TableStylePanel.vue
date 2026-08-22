@@ -21,9 +21,7 @@
         searchLabel="搜索字号"
         autofocus
         @update:value="value => updateTextAttrs({ fontsize: value as string })"
-        :options="fontSizeOptions.map(item => ({
-          label: item, value: item
-        }))"
+        :options="FONT_SIZE_OPTIONS"
       >
         <template #icon>
           <i-icon-park-outline:add-text />
@@ -199,7 +197,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useMainStore, useSlidesStore } from '@/store'
 import type { PPTTableElement, TableCell, TableCellStyle, TableTheme, TextAlign, TextAlignVertical } from '@/types/slides'
-import { FONTS } from '@/configs/font'
+import { FONTS, FONT_SIZE_OPTIONS } from '@/configs/font'
 import emitter, { EmitterEvents, type TableCommand } from '@/utils/emitter'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 
@@ -223,10 +221,6 @@ import PopoverMenuItem from '@/components/PopoverMenuItem.vue'
 const slidesStore = useSlidesStore()
 const { handleElement, handleElementId, selectedTableCells: selectedCells } = storeToRefs(useMainStore())
 const themeColor = computed(() => slidesStore.theme.themeColors[0])
-
-const fontSizeOptions = [
-  '12px', '14px', '16px', '18px', '20px', '22px', '24px', '28px', '32px',
-]
 
 const textAttrs = ref({
   bold: false,

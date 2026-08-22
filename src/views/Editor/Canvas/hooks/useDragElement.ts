@@ -5,6 +5,12 @@ import { useMainStore, useSlidesStore, useKeyboardStore } from '@/store'
 import type { PPTElement } from '@/types/slides'
 import type { AlignmentLineProps } from '@/types/edit'
 import { createElementIdMap, getRectRotatedRange, uniqAlignLines, type AlignLine } from '@/utils/element'
+import {
+  createAlignmentGuide,
+  findClosestAlignment,
+  getAlignmentGuidePadding,
+  getAlignmentThreshold,
+} from '@/utils/alignment'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 import { cloneEditorElements } from '@/utils/editorElement'
 
@@ -31,7 +37,9 @@ export default (
     const edgeWidth = viewportSize.value
     const edgeHeight = viewportSize.value * viewportRatio.value
     
-    const sorptionRange = 5
+    const dragStartThreshold = 5
+    const alignmentThreshold = getAlignmentThreshold(canvasScale.value)
+    const alignmentGuidePadding = getAlignmentGuidePadding(canvasScale.value)
 
     const originElementList = cloneEditorElements(elementList.value)
     let originActiveElementList = originElementList.filter(el => activeElementIdList.value.includes(el.id))
@@ -170,8 +178,8 @@ export default (
       // 如果误操作标记为true，表示当前还处在误操作范围内，但仍然需要继续计算检查后续操作是否还处于误操作
       // 如果误操作标记为false，表示已经脱离了误操作范围，不需要再次计算
       if (isMisoperation !== false) {
-        isMisoperation = Math.abs(startPageX - currentPageX) < sorptionRange && 
-                         Math.abs(startPageY - currentPageY) < sorptionRange
+        isMisoperation = Math.abs(startPageX - currentPageX) < dragStartThreshold &&
+                         Math.abs(startPageY - currentPageY) < dragStartThreshold
       }
       if (!isMouseDown || isMisoperation) return
 
@@ -268,49 +276,38 @@ export default (
       // 将收集到的对齐吸附线与计算的目标元素位置范围做对比，二者的差小于设定的值时执行自动对齐校正
       // 水平和垂直两个方向需要分开计算
       const _alignmentLines: AlignmentLineProps[] = []
-      let isVerticalAdsorbed = false
-      let isHorizontalAdsorbed = false
-      for (let i = 0; i < horizontalLines.length; i++) {
-        const { value, range } = horizontalLines[i]
-        const min = Math.min(...range, targetMinX, targetMaxX)
-        const max = Math.max(...range, targetMinX, targetMaxX)
-        
-        if (Math.abs(targetMinY - value) < sorptionRange && !isHorizontalAdsorbed) {
-          targetTop = targetTop - (targetMinY - value)
-          isHorizontalAdsorbed = true
-          _alignmentLines.push({type: 'horizontal', axis: {x: min - 50, y: value}, length: max - min + 100})
-        }
-        if (Math.abs(targetMaxY - value) < sorptionRange && !isHorizontalAdsorbed) {
-          targetTop = targetTop - (targetMaxY - value)
-          isHorizontalAdsorbed = true
-          _alignmentLines.push({type: 'horizontal', axis: {x: min - 50, y: value}, length: max - min + 100})
-        }
-        if (Math.abs(targetCenterY - value) < sorptionRange && !isHorizontalAdsorbed) {
-          targetTop = targetTop - (targetCenterY - value)
-          isHorizontalAdsorbed = true
-          _alignmentLines.push({type: 'horizontal', axis: {x: min - 50, y: value}, length: max - min + 100})
-        }
-      }
-      for (let i = 0; i < verticalLines.length; i++) {
-        const { value, range } = verticalLines[i]
-        const min = Math.min(...range, targetMinY, targetMaxY)
-        const max = Math.max(...range, targetMinY, targetMaxY)
+      const horizontalMatch = findClosestAlignment(horizontalLines, [
+        { value: targetMinY, range: [targetMinX, targetMaxX], priority: 1 },
+        { value: targetMaxY, range: [targetMinX, targetMaxX], priority: 1 },
+        { value: targetCenterY, range: [targetMinX, targetMaxX], priority: 0 },
+      ], alignmentThreshold)
 
-        if (Math.abs(targetMinX - value) < sorptionRange && !isVerticalAdsorbed) {
-          targetLeft = targetLeft - (targetMinX - value)
-          isVerticalAdsorbed = true
-          _alignmentLines.push({type: 'vertical', axis: {x: value, y: min - 50}, length: max - min + 100})
-        }
-        if (Math.abs(targetMaxX - value) < sorptionRange && !isVerticalAdsorbed) {
-          targetLeft = targetLeft - (targetMaxX - value)
-          isVerticalAdsorbed = true
-          _alignmentLines.push({type: 'vertical', axis: {x: value, y: min - 50}, length: max - min + 100})
-        }
-        if (Math.abs(targetCenterX - value) < sorptionRange && !isVerticalAdsorbed) {
-          targetLeft = targetLeft - (targetCenterX - value)
-          isVerticalAdsorbed = true
-          _alignmentLines.push({type: 'vertical', axis: {x: value, y: min - 50}, length: max - min + 100})
-        }
+      if (horizontalMatch) {
+        targetTop = targetTop - horizontalMatch.offset
+        targetMinY = targetMinY - horizontalMatch.offset
+        targetMaxY = targetMaxY - horizontalMatch.offset
+      }
+
+      const verticalMatch = findClosestAlignment(verticalLines, [
+        { value: targetMinX, range: [targetMinY, targetMaxY], priority: 1 },
+        { value: targetMaxX, range: [targetMinY, targetMaxY], priority: 1 },
+        { value: targetCenterX, range: [targetMinY, targetMaxY], priority: 0 },
+      ], alignmentThreshold)
+
+      if (verticalMatch) {
+        targetLeft = targetLeft - verticalMatch.offset
+        targetMinX = targetMinX - verticalMatch.offset
+        targetMaxX = targetMaxX - verticalMatch.offset
+      }
+
+      if (horizontalMatch) {
+        _alignmentLines.push(createAlignmentGuide('horizontal', {
+          ...horizontalMatch,
+          anchor: { ...horizontalMatch.anchor, range: [targetMinX, targetMaxX] },
+        }, alignmentGuidePadding))
+      }
+      if (verticalMatch) {
+        _alignmentLines.push(createAlignmentGuide('vertical', verticalMatch, alignmentGuidePadding))
       }
       alignmentLines.value = _alignmentLines
       
