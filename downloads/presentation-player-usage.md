@@ -4,32 +4,38 @@
 
 ## 同源网页组件
 
-同一网站内的业务组件使用 `type: 'widget'`，不需要把整页塞进 iframe。编辑器保存稳定的 `widgetId`、版本要求、props、state key、元素矩形、挂载时机和滚动策略；消费项目通过 `PlayerOptions.widgets` 注册真正的框架组件：
+同一网站内的业务组件使用 `type: 'widget'`，不需要把整页塞进 iframe。编辑器插入时填写友好名称，系统自动生成持久化的 `widgetId` 和 state key。消费项目先检查文稿需求，再用精确 `widgetId` 注册真正的框架组件；友好名称用于选择业务实现和人工识别：
 
 ```ts
-const widgets = {
-  'lesson-outline': definePresentationWidget({
-    id: 'lesson-outline',
-    version: '1.2.0',
+const requirements = inspectPresentationRequirements(presentation)
+const widgets = Object.fromEntries(requirements.requirements.map(requirement => [
+  requirement.widgetId,
+  definePresentationWidget({
+    id: requirement.widgetId,
     render({ content, props, stateKey, onCleanup }) {
-      const app = createApp(LessonOutline, { ...props, stateKey })
+      const name = requirement.occurrences[0]?.name
+      const app = createApp(widgetComponents[name || ''], { ...props, stateKey })
       app.mount(content)
       onCleanup(() => app.unmount())
     },
   }),
-}
-
-const requirements = inspectPresentationRequirements(presentation, widgets)
+]))
 const player = createPresentationPlayer(host, presentation, { widgets })
 ```
 
-`eager` 会在入场动画前挂载，适合需要先完成布局再播放的组件；`onReveal` 到第一次入场时才挂载，适合重型图表或 WebGL。编辑器和消费项目应依赖同一个 widget registry 包。
+`inspectPresentationRequirements()` 按 `widgetId` 汇总需求；每个 occurrence 返回友好 `name`、页码、元素 ID、尺寸、滚动模式、滚动条策略、边界策略和动画出现时机。`widgetId` 是机器契约，`elementId` 是文稿内部实例位置，`name` 是面向人的业务标签。版本要求和延迟挂载等协议字段仍保留给外部生成器及高级接入。
+
+`eager` 会在入场动画前挂载；新建组件固定使用该默认值。`onReveal` 仍可由外部文稿生成器设置，适合明确需要延迟创建的重型图表或 WebGL。
 
 - `fit`：按 intrinsic size 居中等比缩放到元素矩形，不滚动。
 - `internal`：组件占满固定视口，超出内容在内部滚动。
 - `document`：内容形成长页面，仍被幻灯片元素矩形裁切；可用 `intrinsicHeight` 声明最小内容高度。
 - `contain`：到滚动边界后仍拦截手势。
 - `handoff`：到边界后将后续规范化手势交给播放器翻页。
+- `hidden`：隐藏滚动条但保留滚轮、触摸和键盘滚动。
+- `auto`：使用浏览器滚动条。
+
+编辑器新建组件默认使用 `fit + contain + hidden`，内容受元素宽高限制，鼠标位于组件区域时不会触发播放器翻页。开启“允许长页面滚动”后改用 `document`，滚动条仍默认隐藏；只有进一步开启“滚动到边界后允许翻页”才使用 `handoff`。鼠标移出组件区域后，播放器照常接管滚轮翻页。
 
 播放器会沿事件目标向上识别组件内部原生的 `overflow: auto/scroll` 容器；只要该容器仍可滚动，
 滚轮就不会进入幻灯片翻页手势。
@@ -97,9 +103,9 @@ player.destroy()
 
 在 Vue/React/Svelte 中，组件只需要持有容器元素，并在卸载生命周期调用 `destroy()`。不要同时对同一容器创建多个播放器实例。
 
-## 3. 读取与验证 JSON
+## 3. 读取与验证 PPTX/JSON
 
-播放器接受对象和 JSON 文本。本地文件、`Blob` 或 `Response` 使用统一读取入口：
+播放器接受对象、JSON 文本，以及由本项目导出的 PPTX。本地文件、`Blob`、`Response` 或二进制数据使用统一读取入口：
 
 ```ts
 import {
@@ -109,7 +115,7 @@ import {
   readPlayerDocument,
 } from 'pptist-presentation-player'
 
-const file = document.querySelector<HTMLInputElement>('#json-file')!.files![0]
+const file = document.querySelector<HTMLInputElement>('#presentation-file')!.files![0]
 const document = await readPlayerDocument(file)
 
 const compatibility = analyzePresentationCompatibility(document)
@@ -121,7 +127,9 @@ if (compatibility.blocking.length || !resources.portable) {
 const player = createPresentationPlayer(container, document)
 ```
 
-播放器接受无 `schemaVersion` 的旧文稿、版本 1、版本 2 和当前版本 3；未知未来版本会报错。未知元素属于阻断问题，未知导入转场会使用稳定的淡入回退。
+PPTX 在 PowerPoint 中仍按标准格式播放，网页组件显示 poster 或占位图；同一文件内部的 `pptist/presentation.json` 保存完整网页播放源。NPM 播放器提取该文稿后，`inspectPresentationRequirements()` 即可获得所有 `widgetId` 和 occurrence，再挂载真实网页组件。第三方普通 PPTX 不含此 part，不能被播放器直接当作 PPTist 文稿读取，需要先在编辑器中导入并重新导出。
+
+播放器接受无 `schemaVersion` 的旧文稿、版本 1、版本 2、版本 3 和当前版本 4；未知未来版本会报错。未知元素属于阻断问题，未知导入转场会使用稳定的淡入回退。
 
 ## 4. 媒体资源
 
