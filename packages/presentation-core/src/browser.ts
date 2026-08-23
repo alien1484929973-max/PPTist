@@ -1,5 +1,5 @@
 import type { AnimationPlan } from './effects'
-import type { TimelineTarget } from './types'
+import type { CardinalDirection, TimelineTarget } from './types'
 
 export interface DomAnimationHandle {
   finished: Promise<void>
@@ -31,6 +31,53 @@ export const measureDomAnimationClipPadding = (
     padding = Math.max(padding, strokeWidth * factor)
   }
   return Math.ceil(padding)
+}
+
+export interface DomWipeSnapRange {
+  start: number
+  end: number
+}
+
+const arrowAxisMatchesWipe = (
+  arrowDirection: CardinalDirection,
+  wipeDirection: CardinalDirection,
+) => {
+  const arrowIsHorizontal = arrowDirection === 'left' || arrowDirection === 'right'
+  const wipeIsHorizontal = wipeDirection === 'left' || wipeDirection === 'right'
+  return arrowIsHorizontal === wipeIsHorizontal
+}
+
+/**
+ * Returns the normalized interval occupied by a block-arrow head along the
+ * wipe travel direction. Skipping only that interval keeps the shaft drawing
+ * continuously while the triangular head appears as one solid piece.
+ */
+export const measureDomAnimationWipeSnap = (
+  elements: readonly HTMLElement[],
+  wipeDirection: CardinalDirection,
+): DomWipeSnapRange | undefined => {
+  // Paragraph/character targets and grouped elements must keep their normal
+  // wipe. The snap is valid only when the animated box is the arrow itself.
+  if (elements.length !== 1) return undefined
+  const arrow = elements[0]
+  if (!arrow.matches('[data-pptist-arrow-direction]')) return undefined
+
+  const arrowDirection = arrow.dataset.pptistArrowDirection as CardinalDirection | undefined
+  const base = Number.parseFloat(arrow.dataset.pptistArrowHeadBase || '')
+  if (!arrowDirection || !Number.isFinite(base) || !arrowAxisMatchesWipe(arrowDirection, wipeDirection)) return undefined
+
+  const normalizedBase = Math.max(0, Math.min(1, base))
+  const headCoordinates = arrowDirection === 'right' || arrowDirection === 'down'
+    ? [normalizedBase, 1]
+    : [0, normalizedBase]
+  const toProgress = wipeDirection === 'left' || wipeDirection === 'up'
+    ? (coordinate: number) => coordinate
+    : (coordinate: number) => 1 - coordinate
+  const progress = headCoordinates.map(toProgress)
+  return {
+    start: Math.min(...progress),
+    end: Math.max(...progress),
+  }
 }
 
 const normalizedRange = (range: { start: number; end: number }) => ({

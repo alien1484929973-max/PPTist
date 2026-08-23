@@ -31,6 +31,10 @@ export interface AnimationPlanContext {
   viewportWidth?: number
   viewportHeight?: number
   clipPadding?: number
+  wipeSnap?: {
+    start: number
+    end: number
+  }
 }
 
 const CARDINAL_DIRECTIONS: readonly CardinalDirection[] = ['left', 'right', 'up', 'down']
@@ -59,6 +63,54 @@ const wipeClips = (direction: CardinalDirection, clipPadding = 2) => {
     hidden: hidden[direction],
     visible: `inset(${outside} ${outside} ${outside} ${outside})`,
   }
+}
+
+const wipeClipAtProgress = (
+  direction: CardinalDirection,
+  progress: number,
+  clipPadding = 2,
+) => {
+  const padding = Number.isFinite(clipPadding) ? Math.max(0, clipPadding) : 2
+  const outside = `-${padding}px`
+  const remaining = `${Math.max(0, Math.min(1, 1 - progress)) * 100}%`
+  if (direction === 'left') return `inset(${outside} ${remaining} ${outside} ${outside})`
+  if (direction === 'right') return `inset(${outside} ${outside} ${outside} ${remaining})`
+  if (direction === 'up') return `inset(${outside} ${outside} ${remaining} ${outside})`
+  return `inset(${remaining} ${outside} ${outside} ${outside})`
+}
+
+const wipeKeyframes = (
+  direction: CardinalDirection,
+  clipPadding: number | undefined,
+  snap: AnimationPlanContext['wipeSnap'],
+): AnimationPlanKeyframe[] => {
+  const clips = wipeClips(direction, clipPadding)
+  if (!snap) return [{ clipPath: clips.hidden }, { clipPath: clips.visible }]
+
+  const start = Math.max(0, Math.min(1, snap.start))
+  const end = Math.max(start, Math.min(1, snap.end))
+  const skipped = end - start
+  if (skipped < 0.04 || skipped > 0.65) {
+    return [{ clipPath: clips.hidden }, { clipPath: clips.visible }]
+  }
+
+  const movingDistance = 1 - skipped
+  const snapOffset = movingDistance > 0 ? start / movingDistance : 0
+  const keyframes: AnimationPlanKeyframe[] = [{ clipPath: clips.hidden, offset: 0 }]
+  if (start > 0) {
+    keyframes.push({
+      clipPath: wipeClipAtProgress(direction, start, clipPadding),
+      offset: snapOffset,
+    })
+  }
+  keyframes.push({
+    clipPath: end >= 1
+      ? clips.visible
+      : wipeClipAtProgress(direction, end, clipPadding),
+    offset: snapOffset,
+  })
+  if (end < 1) keyframes.push({ clipPath: clips.visible, offset: 1 })
+  return keyframes
 }
 
 const directionVector: Record<AnimationDirection, [number, number]> = {
@@ -132,11 +184,7 @@ export const createAnimationPlan = (
   }
   else if (effect.kind === 'fade') keyframes = [{ opacity: 0 }, { opacity: 1 }]
   else if (effect.kind === 'wipe') {
-    const clips = wipeClips(effect.direction, context.clipPadding)
-    keyframes = [
-      { clipPath: clips.hidden },
-      { clipPath: clips.visible },
-    ]
+    keyframes = wipeKeyframes(effect.direction, context.clipPadding, context.wipeSnap)
   }
   else if (effect.kind === 'fly') {
     keyframes = [

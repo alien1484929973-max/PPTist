@@ -330,6 +330,73 @@ test('custom renderers can embed host webpage elements and release their resourc
   await window.happyDOM.abort()
 })
 
+test('imported block arrows expose their geometric head interval to wipe playback', async () => {
+  const { window, host } = installDom()
+  const { createPresentationPlayer } = await import('../src/index')
+  const { measureDomAnimationWipeSnap } = await import('@pptist/presentation-core')
+  const player = createPresentationPlayer(host, {
+    width: 1280,
+    height: 720,
+    slides: [{
+      id: 'one',
+      elements: [
+        {
+          id: 'arrow',
+          name: '箭头: 右 58',
+          type: 'shape',
+          left: 919.036,
+          top: 281.973,
+          width: 86.2,
+          height: 14,
+          rotate: 0,
+          path: 'M 64.65 5.25 L 49.33995 0 L 49.33995 2.913435 L 0 2.913435 L 0 7.586565 L 49.33995 7.586565 L 49.33995 10.5 Z',
+          viewBox: [64.65, 10.5],
+          fill: '#1672b8',
+        },
+        {
+          id: 'flipped-arrow',
+          name: '箭头: 右 59',
+          type: 'shape',
+          left: 919.036,
+          top: 310,
+          width: 86.2,
+          height: 14,
+          rotate: 0,
+          flipH: true,
+          path: 'M 64.65 5.25 L 49.33995 0 L 49.33995 2.913435 L 0 2.913435 L 0 7.586565 L 49.33995 7.586565 L 49.33995 10.5 Z',
+          viewBox: [64.65, 10.5],
+          fill: '#1672b8',
+        },
+      ],
+    }],
+  })
+
+  const root = host.querySelector('[data-pptist-element-id="arrow"]') as HTMLElement
+  assert.equal(root.dataset.pptistArrowDirection, 'right')
+  assert.ok(Math.abs(Number(root.dataset.pptistArrowHeadBase) - (49.33995 / 64.65)) < 0.000001)
+  const snap = measureDomAnimationWipeSnap([root], 'left')
+  assert.ok(snap)
+  assert.ok(Math.abs(snap.start - (49.33995 / 64.65)) < 0.000001)
+  assert.equal(snap.end, 1)
+  assert.deepEqual(measureDomAnimationWipeSnap([root], 'up'), undefined)
+
+  const group = root.ownerDocument.createElement('div')
+  group.appendChild(root.cloneNode(true))
+  assert.deepEqual(measureDomAnimationWipeSnap([group], 'left'), undefined)
+  assert.deepEqual(measureDomAnimationWipeSnap([root, root], 'left'), undefined)
+
+  const flipped = host.querySelector('[data-pptist-element-id="flipped-arrow"]') as HTMLElement
+  assert.equal(flipped.dataset.pptistArrowDirection, 'left')
+  assert.ok(Math.abs(Number(flipped.dataset.pptistArrowHeadBase) - (1 - 49.33995 / 64.65)) < 0.000001)
+  const flippedSnap = measureDomAnimationWipeSnap([flipped], 'right')
+  assert.ok(flippedSnap)
+  assert.ok(Math.abs(flippedSnap.start - (49.33995 / 64.65)) < 0.000001)
+  assert.equal(flippedSnap.end, 1)
+
+  player.destroy()
+  await window.happyDOM.abort()
+})
+
 test('registered widgets expose requirements and keep long-page wheel input inside the widget', async () => {
   const { window, host } = installDom()
   const {

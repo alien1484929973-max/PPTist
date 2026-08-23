@@ -40,6 +40,8 @@ flowchart LR
 - `packages/presentation-core` 是无 UI 的领域内核，不得导入 Vue、Pinia 或编辑器组件。
 - `packages/presentation-player` 是正式播放实现，不依赖 Vue，通过 DOM、Web Animations、
   ECharts SVG 和浏览器原生媒体工作。
+- 单向实心箭头的擦除动画会从形状路径测量箭头底边；仅当箭头自身是动画目标时，播放器
+  跨过三角箭头头部区间，避免矩形裁剪造成半边箭头折叠。组合、段落和普通形状保持连续擦除。
 - `backend/` 是独立 Node.js HTTP 服务，文稿内容以 JSONB 保存到 PostgreSQL。
 - 编辑器预览先由 `serializePresentation()` 生成正式 JSON，再通过工作区安装包
   `pptist-presentation-player` 播放。不要在编辑器里维护第二套播放语义。
@@ -399,7 +401,7 @@ GitHub Actions：
 首次发布前需要在 npm 包设置中添加 GitHub Actions Trusted Publisher：仓库所有者填写
 `alien1484929973-max`，仓库填写 `PPTist`，工作流文件填写
 `release-presentation-player.yml`。配置完成后无需在本机登录 npm，也不需要保存
-`NPM_TOKEN`；版本发布使用例如 `presentation-player-v0.2.0` 的 Git 标签触发。
+`NPM_TOKEN`；版本发布使用例如 `presentation-player-v0.2.1` 的 Git 标签触发。
 
 本机开发也可以使用一次性的浏览器授权建立用户级 npm 凭据：
 

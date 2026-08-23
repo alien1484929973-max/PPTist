@@ -46,6 +46,43 @@ test('wipe plans accept measured padding for thick arrow strokes', () => {
   ])
 })
 
+test('wipe snaps across a terminal block-arrow head instead of folding it open', () => {
+  const entrance = createAnimationPlan(
+    { kind: 'wipe', phase: 'entrance', direction: 'left' },
+    { duration: 1000 },
+    { clipPadding: 2, wipeSnap: { start: 0.75, end: 1 } },
+  )
+  assert.deepEqual(entrance.keyframes, [
+    { clipPath: 'inset(-2px calc(100% + 2px) -2px -2px)', offset: 0 },
+    { clipPath: 'inset(-2px 25% -2px -2px)', offset: 1 },
+    { clipPath: 'inset(-2px -2px -2px -2px)', offset: 1 },
+  ])
+
+  const exit = createAnimationPlan(
+    { kind: 'wipe', phase: 'exit', direction: 'left' },
+    { duration: 1000 },
+    { clipPadding: 2, wipeSnap: { start: 0.75, end: 1 } },
+  )
+  assert.deepEqual(exit.keyframes, [
+    { clipPath: 'inset(-2px -2px -2px -2px)', offset: 0 },
+    { clipPath: 'inset(-2px 25% -2px -2px)', offset: 0 },
+    { clipPath: 'inset(-2px calc(100% + 2px) -2px -2px)', offset: 1 },
+  ])
+})
+
+test('wipe snaps a leading arrow head before drawing the remaining shaft', () => {
+  const plan = createAnimationPlan(
+    { kind: 'wipe', phase: 'entrance', direction: 'right' },
+    { duration: 1000 },
+    { clipPadding: 2, wipeSnap: { start: 0, end: 0.25 } },
+  )
+  assert.deepEqual(plan.keyframes, [
+    { clipPath: 'inset(-2px -2px -2px calc(100% + 2px))', offset: 0 },
+    { clipPath: 'inset(-2px -2px -2px 75%)', offset: 0 },
+    { clipPath: 'inset(-2px -2px -2px -2px)', offset: 1 },
+  ])
+})
+
 test('animation timing clamps repetition and retains auto-reverse easing', () => {
   const plan = createAnimationPlan(
     { kind: 'fade', phase: 'entrance' },

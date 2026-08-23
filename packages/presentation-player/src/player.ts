@@ -5,6 +5,7 @@ import {
   createAnimationPlan,
   matchMorphElements,
   measureDomAnimationClipPadding,
+  measureDomAnimationWipeSnap,
   presentationMorphGeometryDiffers,
   presentationMorphNeedsAnimation,
   presentationMorphNeedsCrossfade,
@@ -887,6 +888,9 @@ export class DomPresentationPlayer implements PresentationPlayer {
       viewportWidth: this.presentation.width,
       viewportHeight: this.presentation.height,
       clipPadding: measureDomAnimationClipPadding(targets.elements),
+      wipeSnap: canonical.kind === 'wipe'
+        ? measureDomAnimationWipeSnap(targets.elements, canonical.direction)
+        : undefined,
     })
     for (const target of targets.elements) setDomAnimationFinalState(target, plan)
     this.cleanupHandlers.push(targets.cleanup)
@@ -906,6 +910,9 @@ export class DomPresentationPlayer implements PresentationPlayer {
       viewportWidth: this.presentation.width,
       viewportHeight: this.presentation.height,
       clipPadding: measureDomAnimationClipPadding(targets.elements),
+      wipeSnap: canonical.kind === 'wipe'
+        ? measureDomAnimationWipeSnap(targets.elements, canonical.direction)
+        : undefined,
     })
     const handles = targets.elements
       .map(element => runDomAnimation(element, plan))

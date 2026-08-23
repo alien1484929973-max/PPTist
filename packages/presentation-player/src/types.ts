@@ -121,6 +121,8 @@ export interface PlayerElement {
   colorMask?: string
   viewBox?: [number, number]
   path?: string
+  pathFormula?: string
+  pptxShapeType?: string
   gradient?: PlayerGradient
   pattern?: string
   text?: PlayerShapeText

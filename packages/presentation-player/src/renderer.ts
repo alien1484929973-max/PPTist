@@ -208,6 +208,8 @@ const renderImage = (context: ElementRendererContext) => {
 type ShapeElementData = PlayerElement & {
   viewBox?: [number, number]
   path?: string
+  pathFormula?: string
+  pptxShapeType?: string
   fill?: string
   gradient?: PlayerGradient
   pattern?: string
@@ -226,6 +228,83 @@ type ShapeElementData = PlayerElement & {
     paragraphSpace?: number
     inset?: [number, number, number, number]
   }
+}
+
+type BlockArrowDirection = 'left' | 'right' | 'up' | 'down'
+
+const blockArrowDirection = (element: ShapeElementData): BlockArrowDirection | undefined => {
+  const metadata = [element.pathFormula, element.pptxShapeType]
+    .filter((value): value is string => !!value)
+    .map(value => value.toLowerCase())
+  const knownDirections: Record<string, BlockArrowDirection> = {
+    rightarrow: 'right',
+    leftarrow: 'left',
+    uparrow: 'up',
+    downarrow: 'down',
+  }
+  for (const value of metadata) {
+    if (knownDirections[value]) return knownDirections[value]
+  }
+  if (metadata.length) return undefined
+
+  const name = `${element.name || ''} ${element.source?.name || ''}`
+  if (/箭头\s*[:：]\s*右|右箭头|right\s+arrow|arrow\s*[:：]\s*right/i.test(name)) return 'right'
+  if (/箭头\s*[:：]\s*左|左箭头|left\s+arrow|arrow\s*[:：]\s*left/i.test(name)) return 'left'
+  if (/箭头\s*[:：]\s*上|上箭头|up\s+arrow|arrow\s*[:：]\s*up/i.test(name)) return 'up'
+  if (/箭头\s*[:：]\s*下|下箭头|down\s+arrow|arrow\s*[:：]\s*down/i.test(name)) return 'down'
+  return undefined
+}
+
+const linearPathPoints = (path: string) => {
+  const points: Array<[number, number]> = []
+  const pattern = /[ML]\s*(-?\d+(?:\.\d+)?(?:e[+-]?\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?(?:e[+-]?\d+)?)/gi
+  let match = pattern.exec(path)
+  while (match) {
+    const x = Number.parseFloat(match[1])
+    const y = Number.parseFloat(match[2])
+    if (Number.isFinite(x) && Number.isFinite(y)) points.push([x, y])
+    match = pattern.exec(path)
+  }
+  return points
+}
+
+const blockArrowHeadBase = (
+  element: ShapeElementData,
+  direction: BlockArrowDirection,
+) => {
+  if (!element.path || !element.viewBox) return undefined
+  const points = linearPathPoints(element.path)
+  if (points.length < 3) return undefined
+  const horizontal = direction === 'left' || direction === 'right'
+  const extent = horizontal ? element.viewBox[0] : element.viewBox[1]
+  if (!(extent > 0)) return undefined
+  const coordinates = [...new Set(points.map(point => point[horizontal ? 0 : 1]))].sort((a, b) => a - b)
+  if (coordinates.length < 3) return undefined
+  const base = direction === 'right' || direction === 'down'
+    ? coordinates[coordinates.length - 2]
+    : coordinates[1]
+  const ratio = base / extent
+  return ratio > 0 && ratio < 1 ? ratio : undefined
+}
+
+const flippedBlockArrowGeometry = (
+  element: ShapeElementData,
+  direction: BlockArrowDirection,
+  headBase: number,
+) => {
+  if (element.flipH && (direction === 'left' || direction === 'right')) {
+    return {
+      direction: direction === 'left' ? 'right' : 'left',
+      headBase: 1 - headBase,
+    } as const
+  }
+  if (element.flipV && (direction === 'up' || direction === 'down')) {
+    return {
+      direction: direction === 'up' ? 'down' : 'up',
+      headBase: 1 - headBase,
+    } as const
+  }
+  return { direction, headBase }
 }
 
 const appendSvgFill = (
@@ -283,6 +362,13 @@ const renderShape = (context: ElementRendererContext) => {
   wrapper.style.opacity = String(element.opacity ?? 1)
   wrapper.style.filter = element.shadow ? `drop-shadow(${shadowStyle(element.shadow)})` : ''
   wrapper.style.transform = `scale(${element.flipH ? -1 : 1}, ${element.flipV ? -1 : 1})`
+  const arrowDirection = blockArrowDirection(element)
+  const arrowHeadBase = arrowDirection ? blockArrowHeadBase(element, arrowDirection) : undefined
+  if (arrowDirection && arrowHeadBase !== undefined) {
+    const geometry = flippedBlockArrowGeometry(element, arrowDirection, arrowHeadBase)
+    context.container.dataset.pptistArrowDirection = geometry.direction
+    context.container.dataset.pptistArrowHeadBase = String(geometry.headBase)
+  }
 
   const svg = svgElement(context.container.ownerDocument, 'svg')
   const viewBox = element.viewBox || [element.width, element.height || 1]
