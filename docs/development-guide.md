@@ -393,8 +393,13 @@ dist/
 GitHub Actions：
 
 - 推送 `master`：Node.js 22 构建并发布 `dist/public` 到 GitHub Pages；
-- 推送 `presentation-player-v*` 标签：测试、打包并创建 GitHub Release；
-- 手动运行播放器工作流并启用 `publish_npm`：发布到 npm，需要 `NPM_TOKEN`。
+- 推送 `presentation-player-v*` 标签：测试、打包、通过 npm Trusted Publishing 发布播放器并创建 GitHub Release；
+- 手动运行播放器工作流：只执行测试和打包，不发布 npm。
+
+首次发布前需要在 npm 包设置中添加 GitHub Actions Trusted Publisher：仓库所有者填写
+`alien1484929973-max`，仓库填写 `PPTist`，工作流文件填写
+`release-presentation-player.yml`。配置完成后无需在本机登录 npm，也不需要保存
+`NPM_TOKEN`；版本发布使用例如 `presentation-player-v0.2.0` 的 Git 标签触发。
 
 不要手工编辑或复用旧 `dist/` / `release/`。生产部署流程以
 [`DEPLOYMENT.md`](../DEPLOYMENT.md) 为准。
