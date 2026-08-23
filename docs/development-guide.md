@@ -401,6 +401,17 @@ GitHub Actions：
 `release-presentation-player.yml`。配置完成后无需在本机登录 npm，也不需要保存
 `NPM_TOKEN`；版本发布使用例如 `presentation-player-v0.2.0` 的 Git 标签触发。
 
+本机开发也可以使用一次性的浏览器授权建立用户级 npm 凭据：
+
+```powershell
+npm login --auth-type=web --location=user --registry=https://registry.npmjs.org/
+npm config set provenance false --location=user
+```
+
+凭据保存在用户配置文件（通常是 `C:\Users\<用户名>\.npmrc`），与当前项目目录无关；
+之后在任意 npm 项目中直接执行 `npm publish` 即可。GitHub Actions 仍通过命令行显式启用
+`--provenance`，本机发布不依赖 GitHub OIDC。
+
 不要手工编辑或复用旧 `dist/` / `release/`。生产部署流程以
 [`DEPLOYMENT.md`](../DEPLOYMENT.md) 为准。
 
