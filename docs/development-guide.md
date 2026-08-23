@@ -412,6 +412,12 @@ npm config set provenance false --location=user
 之后在任意 npm 项目中直接执行 `npm publish` 即可。GitHub Actions 仍通过命令行显式启用
 `--provenance`，本机发布不依赖 GitHub OIDC。
 
+如果发布返回 `EOTP`，说明 npm 仍要求交互式二次验证。此时在 npm 网页创建
+Granular Access Token，权限设为 `Read and write`，开启 `Bypass two-factor authentication`，
+并尽量限制到需要发布的包；将 token 写入用户级 `.npmrc` 的
+`//registry.npmjs.org/:_authToken=...` 配置后，任意目录都可以非交互执行 `npm publish`。
+该 token 等同发布钥匙，只应保存在本机用户配置中，并设置过期时间定期轮换。
+
 不要手工编辑或复用旧 `dist/` / `release/`。生产部署流程以
 [`DEPLOYMENT.md`](../DEPLOYMENT.md) 为准。
 
