@@ -26,9 +26,11 @@ try {
     '--pack-destination',
     packDirectory,
   ], { cwd: packageDirectory, maxBuffer: 10 * 1024 * 1024 })
-  const packResult = JSON.parse(stdout)
-  assert.equal(packResult.length, 1, 'npm pack must produce exactly one tarball')
-  const tarball = join(packDirectory, packResult[0].filename)
+  const packOutput = JSON.parse(stdout)
+  const packResults = Array.isArray(packOutput) ? packOutput : Object.values(packOutput)
+  assert.equal(packResults.length, 1, 'npm pack must produce exactly one tarball')
+  const [packResult] = packResults
+  const tarball = join(packDirectory, packResult.filename)
   await readFile(tarball)
 
   await writeFile(join(consumerDirectory, 'package.json'), JSON.stringify({
@@ -100,7 +102,7 @@ void [report, pending, player]
   ], { cwd: consumerDirectory, maxBuffer: 10 * 1024 * 1024 })
 
   // eslint-disable-next-line no-console
-  console.log(`Verified isolated npm install and TypeScript consumer from ${packResult[0].filename}.`)
+  console.log(`Verified isolated npm install and TypeScript consumer from ${packResult.filename}.`)
 }
 finally {
   await rm(temporaryDirectory, { recursive: true, force: true })
