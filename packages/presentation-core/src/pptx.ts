@@ -194,6 +194,18 @@ const animationClass = (value?: string): TimelineAnimationClass => {
   return 'unknown'
 }
 
+const directionFromPresetSubtype = (value?: number): AnimationDirection | undefined => {
+  if (value === 1) return 'up'
+  if (value === 2) return 'right'
+  if (value === 3) return 'topRight'
+  if (value === 4) return 'down'
+  if (value === 6) return 'bottomRight'
+  if (value === 8) return 'left'
+  if (value === 9) return 'topLeft'
+  if (value === 12) return 'bottomLeft'
+  return undefined
+}
+
 const parseTimeline = (document: XMLDocument, xmlRuntime: PptxXmlRuntime): AnimationTimeline | undefined => {
   const timing = firstByLocalName(document, 'timing')
   if (!timing) return undefined
@@ -229,6 +241,7 @@ const parseTimeline = (document: XMLDocument, xmlRuntime: PptxXmlRuntime): Anima
     const motionPath = getAttribute(motion, 'path')
     const validMotionPath = motionPath && parsePptxMotionPath(motionPath).length >= 2
     const presetId = finiteNumber(getAttribute(timeNode, 'presetID')) || undefined
+    const presetSubtype = finiteNumber(getAttribute(timeNode, 'presetSubtype')) || undefined
     const repeatCount = parseRepeatCount(getAttribute(timeNode, 'repeatCount'))
     const autoReverse = getAttribute(timeNode, 'autoRev') === '1'
     const acceleration = finiteNumber(getAttribute(timeNode, 'accel')) / 100000
@@ -236,7 +249,7 @@ const parseTimeline = (document: XMLDocument, xmlRuntime: PptxXmlRuntime): Anima
     const effectFilter = getAttribute(effect, 'filter')
     const effectTransition = getAttribute(effect, 'transition')
     const effectDescriptor = `${effectFilter || ''} ${effectTransition || ''}`.toLocaleLowerCase()
-    const parsedDirection = directionFromName(effectDescriptor)
+    const parsedDirection = directionFromName(effectDescriptor) || directionFromPresetSubtype(presetSubtype)
     const isWipe = presetId === 22 || effectDescriptor.includes('wipe')
     const phase = effectTransition === 'out' || parsedAnimationClass === 'exit' ? 'exit' : 'entrance'
     const visibilityEffect = parsedAnimationClass === 'entrance' || parsedAnimationClass === 'exit'
@@ -298,7 +311,7 @@ const parseTimeline = (document: XMLDocument, xmlRuntime: PptxXmlRuntime): Anima
         class: parsedAnimationClass,
         compatibility,
         presetId,
-        presetSubtype: finiteNumber(getAttribute(timeNode, 'presetSubtype')) || undefined,
+        presetSubtype,
         filter: effectFilter,
         direction: parsedDirection,
         transition: effectTransition === 'in' || effectTransition === 'out' ? effectTransition : undefined,

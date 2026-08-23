@@ -18,6 +18,28 @@ export interface PresentationDefaults<TSlide, TTheme> {
   slides: TSlide[]
 }
 
+type UnknownRecord = Record<string, unknown>
+
+const isRecord = (value: unknown): value is UnknownRecord => !!value && typeof value === 'object'
+
+const migrateWidgetScrollProtocol = <TSlide>(slides: TSlide[]): TSlide[] => slides.map(slide => {
+  if (!isRecord(slide) || !Array.isArray(slide.elements)) return slide
+  let changed = false
+  const elements = slide.elements.map(element => {
+    if (!isRecord(element) || element.type !== 'widget') return element
+    const scroll = isRecord(element.widgetScroll) ? element.widgetScroll : undefined
+    if (scroll?.scrollbar === 'hidden' || scroll?.scrollbar === 'auto') return element
+    changed = true
+    return {
+      ...element,
+      widgetScroll: scroll
+        ? { ...scroll, scrollbar: 'hidden' }
+        : { mode: 'fit', overscroll: 'contain', scrollbar: 'hidden' },
+    }
+  })
+  return changed ? { ...slide, elements } as TSlide : slide
+})
+
 /** Upgrade legacy cloud/editor documents without coupling the schema to Vue. */
 export const migratePresentationDocument = <TSlide, TTheme>(
   input: unknown,
@@ -28,7 +50,8 @@ export const migratePresentationDocument = <TSlide, TTheme>(
     : {}
   const width = Number(source.width) || defaults.width
   const height = Number(source.height) || defaults.height
-  const slides = Array.isArray(source.slides) && source.slides.length ? source.slides : defaults.slides
+  const sourceSlides = Array.isArray(source.slides) && source.slides.length ? source.slides : defaults.slides
+  const slides = migrateWidgetScrollProtocol(sourceSlides)
 
   return {
     schemaVersion: CURRENT_PRESENTATION_SCHEMA_VERSION,

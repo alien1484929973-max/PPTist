@@ -9,6 +9,7 @@ import type {
   PlayerWidgetRequirementReport,
   PlayerWidgetRendererContext,
   PlayerWidgetScrollMode,
+  PlayerWidgetScrollbar,
   PresentationWidgetDefinition,
   PresentationWidgetRegistry,
 } from './types'
@@ -34,6 +35,15 @@ export const isPresentationWidgetVersionCompatible = (
 
 export const definePresentationWidget = <T extends PresentationWidgetDefinition>(definition: T): T => definition
 
+const resolveWidgetDefinition = (
+  element: PlayerElement,
+  registry: PresentationWidgetRegistry,
+) => {
+  const widgetId = element.widgetId?.trim()
+  const name = element.name?.trim()
+  return (widgetId ? registry[widgetId] : undefined) || (name ? registry[name] : undefined)
+}
+
 const widgetIssue = (
   element: PlayerElement,
   slideId: string,
@@ -49,7 +59,7 @@ const widgetIssue = (
       message: `Widget element "${element.id}" does not declare widgetId.`,
     }
   }
-  const definition = registry[widgetId]
+  const definition = resolveWidgetDefinition(element, registry)
   if (!definition) {
     return {
       code: 'missing-widget',
@@ -94,6 +104,7 @@ export const inspectPresentationRequirements = (
         slideIndex,
         slideId: slide.id,
         elementId: element.id,
+        name: element.name?.trim() || undefined,
         bounds: {
           left: element.left,
           top: element.top,
@@ -101,7 +112,9 @@ export const inspectPresentationRequirements = (
           height: element.height || 0,
         },
         stateKey: element.widgetStateKey || element.id,
-        scrollMode: element.widgetScroll?.mode || 'internal',
+        scrollMode: element.widgetScroll?.mode || 'fit',
+        overscroll: element.widgetScroll?.overscroll || 'contain',
+        scrollbar: element.widgetScroll?.scrollbar || 'hidden',
         mountPolicy: element.widgetMountPolicy || 'eager',
         interactive: element.widgetInteractive !== false,
         reveal: entrance ? 'animation' : 'slide',
@@ -140,6 +153,7 @@ const applyWidgetLayout = (
   content.className = 'pptist-player-widget-content'
   viewport.dataset.pptistScroll = mode === 'fit' ? 'false' : 'true'
   viewport.dataset.pptistOverscroll = element.widgetScroll?.overscroll || 'contain'
+  viewport.dataset.pptistScrollbar = element.widgetScroll?.scrollbar || 'hidden'
 
   if (mode === 'fit') {
     const width = Math.max(1, element.widgetScroll?.intrinsicWidth || element.width)
@@ -178,7 +192,7 @@ export const renderPresentationWidget = (
   }
 
   const widgetId = element.widgetId!.trim()
-  const definition = options.widgets![widgetId]
+  const definition = resolveWidgetDefinition(element, options.widgets!)!
   const root = container.ownerDocument.createElement('div')
   root.className = 'pptist-player-widget'
   root.dataset.pptistWidget = widgetId
@@ -187,7 +201,9 @@ export const renderPresentationWidget = (
 
   const viewport = container.ownerDocument.createElement('div')
   const content = container.ownerDocument.createElement('div')
-  const scrollMode = element.widgetScroll?.mode || 'internal'
+  const scrollMode = element.widgetScroll?.mode || 'fit'
+  const overscroll = element.widgetScroll?.overscroll || 'contain'
+  const scrollbar: PlayerWidgetScrollbar = element.widgetScroll?.scrollbar || 'hidden'
   applyWidgetLayout(element, viewport, content, scrollMode)
   viewport.appendChild(content)
   root.appendChild(viewport)
@@ -207,6 +223,8 @@ export const renderPresentationWidget = (
       props: Object.freeze({ ...(element.widgetProps || {}) }),
       stateKey: element.widgetStateKey || element.id,
       scrollMode,
+      overscroll,
+      scrollbar,
       viewport,
       content,
       onCleanup: cleanup => cleanups.push(cleanup),

@@ -302,12 +302,15 @@ export type PlayerElementRenderer = (context: ElementRendererContext) => HTMLEle
 export type PlayerWidgetMountPolicy = 'eager' | 'onReveal'
 export type PlayerWidgetScrollMode = 'fit' | 'internal' | 'document'
 export type PlayerWidgetOverscrollBehavior = 'contain' | 'handoff'
+export type PlayerWidgetScrollbar = 'hidden' | 'auto'
 
 export interface PlayerWidgetScrollOptions {
   /** fit scales a fixed intrinsic surface; internal/document preserve native pixels and allow vertical overflow. */
   mode: PlayerWidgetScrollMode
   /** Boundary behavior for presentation wheel navigation. Defaults to contain. */
   overscroll?: PlayerWidgetOverscrollBehavior
+  /** Scrollbar visibility for scrollable widgets. Defaults to hidden. */
+  scrollbar?: PlayerWidgetScrollbar
   /** Design width used by fit mode. Defaults to the element box. */
   intrinsicWidth?: number
   /** Design height for fit mode, or minimum long-page height for document mode. */
@@ -320,6 +323,8 @@ export interface PlayerWidgetRendererContext extends ElementRendererContext {
   props: Readonly<Record<string, unknown>>
   stateKey: string
   scrollMode: PlayerWidgetScrollMode
+  overscroll: PlayerWidgetOverscrollBehavior
+  scrollbar: PlayerWidgetScrollbar
   viewport: HTMLElement
   content: HTMLElement
 }
@@ -336,9 +341,13 @@ export interface PlayerWidgetOccurrence {
   slideIndex: number
   slideId: string
   elementId: string
+  /** Friendly editor-authored component name. */
+  name?: string
   bounds: { left: number; top: number; width: number; height: number }
   stateKey: string
   scrollMode: PlayerWidgetScrollMode
+  overscroll: PlayerWidgetOverscrollBehavior
+  scrollbar: PlayerWidgetScrollbar
   mountPolicy: PlayerWidgetMountPolicy
   interactive: boolean
   reveal: 'slide' | 'animation'

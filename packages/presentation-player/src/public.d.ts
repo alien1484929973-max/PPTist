@@ -51,8 +51,9 @@ export declare const renderPresentationChart: (
 ) => PlayerChartHandle
 
 export declare const PRESENTATION_IMAGE_CLIP_PATHS: Readonly<Record<string, string>>
-export declare const CURRENT_PLAYER_SCHEMA_VERSION: 3
-export declare const SUPPORTED_PLAYER_SCHEMA_VERSIONS: readonly [1, 2, 3]
+export declare const CURRENT_PLAYER_SCHEMA_VERSION: 4
+export declare const SUPPORTED_PLAYER_SCHEMA_VERSIONS: readonly [1, 2, 3, 4]
+export declare const PPTIST_PPTX_EMBEDDED_DOCUMENT_PATH: 'pptist/presentation.json'
 export declare const validatePlayerDocument: (input: unknown) => string[]
 export declare const assertPlayerDocument: (input: unknown) => PlayerDocument
 export declare const parsePlayerDocument: (input: unknown) => PlayerDocument

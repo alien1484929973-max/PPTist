@@ -1,7 +1,10 @@
+import JSZip from 'jszip'
+import { PPTIST_PPTX_EMBEDDED_DOCUMENT_PATH as CORE_PPTIST_PPTX_EMBEDDED_DOCUMENT_PATH } from '@pptist/presentation-core'
 import type { PlayerDocument } from './types'
 
-export const CURRENT_PLAYER_SCHEMA_VERSION = 3 as const
-export const SUPPORTED_PLAYER_SCHEMA_VERSIONS = [1, 2, 3] as const
+export const CURRENT_PLAYER_SCHEMA_VERSION = 4 as const
+export const SUPPORTED_PLAYER_SCHEMA_VERSIONS = [1, 2, 3, 4] as const
+export const PPTIST_PPTX_EMBEDDED_DOCUMENT_PATH = CORE_PPTIST_PPTX_EMBEDDED_DOCUMENT_PATH
 
 /** Return actionable schema errors without mutating a document. */
 export const validatePlayerDocument = (input: unknown): string[] => {
@@ -19,7 +22,7 @@ export const validatePlayerDocument = (input: unknown): string[] => {
   }
   if (
     document.schemaVersion !== undefined &&
-    !SUPPORTED_PLAYER_SCHEMA_VERSIONS.includes(document.schemaVersion as 1 | 2 | 3)
+    !SUPPORTED_PLAYER_SCHEMA_VERSIONS.includes(document.schemaVersion as 1 | 2 | 3 | 4)
   ) {
     errors.push(`Unsupported presentation schema version: ${document.schemaVersion}.`)
   }
@@ -46,15 +49,39 @@ export const parsePlayerDocument = (input: unknown): PlayerDocument => {
   return assertPlayerDocument(parsed)
 }
 
-/** Read File, Blob, Response, JSON text, or an already parsed object. */
-export const readPlayerDocument = async (input: unknown): Promise<PlayerDocument> => {
+const binaryDocumentSource = async (input: unknown) => {
+  if (input instanceof ArrayBuffer) return new Uint8Array(input)
+  if (ArrayBuffer.isView(input)) {
+    return new Uint8Array(input.buffer, input.byteOffset, input.byteLength)
+  }
   if (
     input &&
     typeof input === 'object' &&
-    'text' in input &&
-    typeof (input as { text?: unknown }).text === 'function'
+    'arrayBuffer' in input &&
+    typeof (input as { arrayBuffer?: unknown }).arrayBuffer === 'function'
   ) {
-    return parsePlayerDocument(await (input as { text: () => Promise<string> }).text())
+    return new Uint8Array(await (input as { arrayBuffer: () => Promise<ArrayBuffer> }).arrayBuffer())
   }
+  return undefined
+}
+
+const isZipPackage = (bytes: Uint8Array) => bytes.length >= 4 &&
+  bytes[0] === 0x50 && bytes[1] === 0x4b &&
+  ((bytes[2] === 0x03 && bytes[3] === 0x04) || (bytes[2] === 0x05 && bytes[3] === 0x06))
+
+const readBinaryPlayerDocument = async (bytes: Uint8Array) => {
+  if (!isZipPackage(bytes)) return parsePlayerDocument(new TextDecoder().decode(bytes))
+  const zip = await JSZip.loadAsync(bytes)
+  const embedded = zip.file(PPTIST_PPTX_EMBEDDED_DOCUMENT_PATH)
+  if (!embedded) {
+    throw new TypeError('PPTX does not contain an embedded PPTist presentation document.')
+  }
+  return parsePlayerDocument(await embedded.async('string'))
+}
+
+/** Read a PPTist PPTX, File, Blob, Response, JSON text, bytes, or an already parsed object. */
+export const readPlayerDocument = async (input: unknown): Promise<PlayerDocument> => {
+  const bytes = await binaryDocumentSource(input)
+  if (bytes) return readBinaryPlayerDocument(bytes)
   return parsePlayerDocument(input)
 }

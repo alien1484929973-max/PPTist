@@ -33,12 +33,12 @@ Vite 不把它别名到播放器源码；`predev` 和正式 `build` 会先构建
 ## JSON 契约
 
 正式文稿包含 `schemaVersion`、画布尺寸、主题、幻灯片、最后播放页和元素/动画/转场数据。
-当前版本为 3。播放器接受无版本旧文稿、版本 1、版本 2 和版本 3；未知未来版本明确报错，避免旧
+当前版本为 4。播放器接受无版本旧文稿、版本 1、版本 2、版本 3 和版本 4；未知未来版本明确报错，避免旧
 播放器静默错误播放。
 
 ## 网页组件边界
 
-`packages/presentation-player` 负责 widget 的位置、动画外壳、挂载时机、隐藏滚动条和滚轮仲裁，不能依赖 Vue。宿主注册表负责把 `widgetId` 解析为真实 Vue、React、Canvas、WebGL 或原生 DOM 实现，并负责业务数据和销毁。
+`packages/presentation-player` 负责 widget 的位置、动画外壳、挂载时机、滚动条和滚轮仲裁，不能依赖 Vue。编辑器收集友好名称并自动生成持久化的 `widgetId`；宿主通过 `inspectPresentationRequirements()` 找到所有实例后，应优先按精确 `widgetId` 注册真实 Vue、React、Canvas、WebGL 或原生 DOM 实现，友好名称只作为便捷回退。新建元素默认 `eager + fit + contain + hidden`；插入时可选择长页面滚动、显示滚动条以及边界后交给播放器翻页。版本和 `onReveal` 等高级协议字段供外部生成器和兼容旧文稿使用。
 
 生命周期为 `prepare -> ready -> entering -> active -> exiting -> suspended/destroyed`。页面转场保留真实旧页面 DOM 到动画结束，不再使用 `cloneNode()`，因此 Canvas 像素、媒体状态、事件监听和框架实例在转场期间不会失活。
 
@@ -48,8 +48,7 @@ Vite 不把它别名到播放器源码；`predev` 和正式 `build` 会先构建
 const player = createPresentationPlayer(container, jsonText, options)
 ```
 
-File、Blob 和 Response 先交给 `readPlayerDocument()`。它按照播放器支持版本进行校验，并明确
-拒绝未知未来版本；编辑器正式导出的 JSON 与外部依赖读取的 JSON 遵循同一版本化结构。
+File、Blob、Response、`ArrayBuffer` 和 `Uint8Array` 先交给 `readPlayerDocument()`。JSON 输入直接校验；由本项目导出的 PPTX 会从 `pptist/presentation.json` 提取完整网页播放文稿。普通 PowerPoint 继续读取标准幻灯片对象和原生动画，网页播放器则读取同一文件内的源文稿并恢复 widget。没有该嵌入 part 的任意第三方 PPTX 会明确报错，需要先经过编辑器导入和重新导出。
 
 ## 播放语义
 

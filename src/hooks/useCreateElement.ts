@@ -2,7 +2,7 @@ import { storeToRefs } from 'pinia'
 import { nanoid } from 'nanoid'
 import { useMainStore, useSlidesStore } from '@/store'
 import { getImageSize } from '@/utils/image'
-import type { PPTLineElement, PPTElement, TableCell, TableCellStyle, PPTShapeElement, ChartType, PPTVideoElement, PPTAudioElement, PPTWidgetElement } from '@/types/slides'
+import type { PPTLineElement, PPTElement, TableCell, TableCellStyle, PPTShapeElement, ChartType, PPTVideoElement, PPTAudioElement } from '@/types/slides'
 import { type ShapePoolItem, SHAPE_PATH_FORMULAS } from '@/configs/shapes'
 import type { LinePoolItem } from '@/configs/lines'
 import { CHART_DEFAULT_DATA } from '@/configs/chart'
@@ -25,6 +25,13 @@ interface LineElementPosition {
 interface CreateTextData {
   content?: string
   vertical?: boolean
+}
+
+interface CreateWidgetData {
+  name: string
+  longPage: boolean
+  showScrollbar: boolean
+  handoffAtBoundary: boolean
 }
 
 export default () => {
@@ -223,19 +230,28 @@ export default () => {
     createElement(newElement)
   }
 
-  const createWidgetElement = (data: Pick<PPTWidgetElement, 'widgetId' | 'widgetVersion' | 'widgetMountPolicy' | 'widgetInteractive' | 'widgetScroll'>) => {
+  const createWidgetElement = (data: CreateWidgetData) => {
     const width = 520
     const height = 320
+    const id = nanoid(10)
     createElement({
       type: 'widget',
-      id: nanoid(10),
+      id,
+      name: data.name.trim() || '网页组件',
       left: (viewportSize.value - width) / 2,
       top: (viewportSize.value * viewportRatio.value - height) / 2,
       width,
       height,
       rotate: 0,
-      widgetStateKey: nanoid(10),
-      ...data,
+      widgetId: `widget-${id}`,
+      widgetStateKey: `widget-state-${id}`,
+      widgetMountPolicy: 'eager',
+      widgetInteractive: true,
+      widgetScroll: {
+        mode: data.longPage ? 'document' : 'fit',
+        overscroll: data.longPage && data.handoffAtBoundary ? 'handoff' : 'contain',
+        scrollbar: data.longPage && data.showScrollbar ? 'auto' : 'hidden',
+      },
     })
   }
   

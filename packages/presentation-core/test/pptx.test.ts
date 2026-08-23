@@ -206,3 +206,20 @@ test('PPTX fly import retains diagonal direction as an independent effect option
   assert.equal(legacy[0].effect, 'flyIn')
   assert.equal(legacy[0].direction, 'topLeft')
 })
+
+test('PPTX fly import derives direction from the Office preset subtype', async () => {
+  const xml = wipeSlideXml('left', 'entr')
+    .replace('presetID="22"', 'presetID="2" presetSubtype="4"')
+    .replace('<p:animEffect transition="in" filter="wipe(left)">', '<p:anim calcmode="lin" valueType="num">')
+    .replace('</p:animEffect>', '</p:anim>')
+  const zip = new JSZip()
+  zip.file('ppt/slides/slide1.xml', xml)
+  const buffer = await zip.generateAsync({ type: 'arraybuffer' })
+  const result = await parsePptxImportMetadata(buffer, xmlRuntime)
+  const animation = result.slides[0].animationTimeline?.animations[0]
+
+  assert.equal(animation?.effect.presetSubtype, 4)
+  assert.deepEqual(animation?.effect.canonical, {
+    kind: 'fly', phase: 'entrance', direction: 'down',
+  })
+})

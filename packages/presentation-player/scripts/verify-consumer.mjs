@@ -51,6 +51,7 @@ try {
   await writeFile(smokeFile, `
 import assert from 'node:assert/strict'
 import {
+  PPTIST_PPTX_EMBEDDED_DOCUMENT_PATH,
   analyzePresentationResources,
   parsePlayerDocument,
   readPlayerDocument,
@@ -66,6 +67,7 @@ const json = JSON.stringify({
   }] }],
 })
 const document = parsePlayerDocument(json)
+assert.equal(PPTIST_PPTX_EMBEDDED_DOCUMENT_PATH, 'pptist/presentation.json')
 assert.equal((await readPlayerDocument(new Blob([json]))).slides[0].id, 'consumer')
 assert.equal(analyzePresentationResources(document).portable, true)
 `, 'utf8')
@@ -74,6 +76,7 @@ assert.equal(analyzePresentationResources(document).portable, true)
   const typeSmokeFile = join(consumerDirectory, 'smoke.ts')
   await writeFile(typeSmokeFile, `
 import {
+  PPTIST_PPTX_EMBEDDED_DOCUMENT_PATH,
   analyzePresentationResources,
   createPresentationPlayer,
   parsePlayerDocument,
@@ -87,7 +90,8 @@ const presentation: PlayerDocument = parsePlayerDocument(source)
 const report: PlayerResourceReport = analyzePresentationResources(presentation)
 const pending: Promise<PlayerDocument> = readPlayerDocument(new Blob([source]))
 const player = createPresentationPlayer(document.createElement('div'), source)
-void [report, pending, player]
+const embeddedPath: 'pptist/presentation.json' = PPTIST_PPTX_EMBEDDED_DOCUMENT_PATH
+void [report, pending, player, embeddedPath]
 `, 'utf8')
   await exec(process.execPath, [
     typescriptCli,

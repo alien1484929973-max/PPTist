@@ -44,7 +44,7 @@ player.resize()
 player.destroy()
 ```
 
-也可以直接传入 JSON 文本；选择本地 JSON 文件时使用同一个异步读取入口：
+也可以直接传入 JSON 文本；选择本项目导出的 PPTX 或本地 JSON 文件时使用同一个异步读取入口：
 
 ```ts
 import {
@@ -54,10 +54,12 @@ import {
 
 const playerFromText = createPresentationPlayer(container, jsonText)
 
-const file = document.querySelector<HTMLInputElement>('#json-file')!.files![0]
+const file = document.querySelector<HTMLInputElement>('#presentation-file')!.files![0]
 const documentFromFile = await readPlayerDocument(file)
 const playerFromFile = createPresentationPlayer(container, documentFromFile)
 ```
+
+导出的 PPTX 保持标准 PowerPoint 内容，并在包内的 `pptist/presentation.json` 保存完整网页播放文稿。PowerPoint 使用静态 widget poster/占位图；播放器从同一个 PPTX 提取源文稿并恢复交互组件。未包含该 part 的第三方 PPTX 需要先通过编辑器导入和重新导出。
 
 容器必须有可计算的宽高：
 
@@ -69,7 +71,7 @@ const playerFromFile = createPresentationPlayer(container, documentFromFile)
 
 ## 文稿和兼容性
 
-播放器直接读取 PPTist 文稿 schema，接受无 `schemaVersion` 的旧数据、版本 1、版本 2 和当前版本 3。未来未知版本会明确报错，避免静默错误渲染。可在加载前调用：
+播放器直接读取 PPTist 文稿 schema，接受无 `schemaVersion` 的旧数据、版本 1、版本 2、版本 3 和当前版本 4。未来未知版本会明确报错，避免静默错误渲染。可在加载前调用：
 
 ```ts
 import {
@@ -127,7 +129,7 @@ createPresentationPlayer(container, document, {
 })
 ```
 
-同源网页组件优先使用版本化的 `widgets` 注册表。文稿只保存组件 ID、props、位置、挂载时机和滚动协议，宿主负责挂载真实 Vue、React、Canvas 或原生 DOM 实现：
+同源网页组件使用 `widgets` 注册表。编辑器填写友好名称并自动生成持久化组件 ID；宿主先检查文稿需求，再优先按精确 ID 注册真实 Vue、React、Canvas 或原生 DOM 实现：
 
 ```ts
 import {
@@ -136,23 +138,22 @@ import {
   inspectPresentationRequirements,
 } from 'pptist-presentation-player'
 
-const widgets = {
-  analytics: definePresentationWidget({
-    id: 'analytics',
-    version: '1.0.0',
-    render({ content, props, onCleanup }) {
-      const handle = mountAnalytics(content, props)
-      onCleanup(() => handle.unmount())
+const requirements = inspectPresentationRequirements(document)
+const widgets = Object.fromEntries(requirements.requirements.map(requirement => [
+  requirement.widgetId,
+  definePresentationWidget({
+    id: requirement.widgetId,
+    render(context) {
+      const name = requirement.occurrences[0]?.name
+      const handle = mountWidget(name, context.content, context.props)
+      context.onCleanup(() => handle.unmount())
     },
   }),
-}
-
-const requirements = inspectPresentationRequirements(document, widgets)
-if (!requirements.compatible) console.error(requirements.issues)
+]))
 createPresentationPlayer(container, document, { widgets, wheel: true })
 ```
 
-`widgetScroll.mode` 支持 `fit`、`internal` 和 `document`。`fit` 按 intrinsic size 居中等比缩放；`document` 可用 `intrinsicHeight` 声明长页面最小高度。后两种滚动模式隐藏滚动条但保留滚轮、触摸和键盘滚动，组件内部自己的 `overflow: auto/scroll` 区域也会优先消费手势；`overscroll: 'contain'` 在边界继续由组件接管，`handoff` 在边界把后续手势交给播放器翻页。
+`inspectPresentationRequirements()` 按自动 ID 汇总组件；occurrence 会返回友好名称、页码、元素 ID、位置、尺寸、滚动/滚动条/边界策略和出现动画。编辑器新建组件默认 `eager + fit + contain + hidden`：页面载入即挂载，内容受元素宽高限制，组件区域内的滚轮不触发翻页。插入时可开启 `document` 长页面滚动、显示滚动条和边界 `handoff`；鼠标移出组件区域后播放器照常翻页。`internal`、版本约束和 `onReveal` 等高级字段继续兼容外部生成器和已有文稿。
 
 ## 不可信内容与外部资源
 

@@ -1,8 +1,10 @@
 import type {
   AnimationDirection,
   AnimationPhase,
+  AnimationTimeline,
   CanonicalAnimationEffect,
   CardinalDirection,
+  LegacyAnimationLike,
   TimelineAnimation,
   TimelineTiming,
 } from './types'
@@ -399,6 +401,46 @@ export const canonicalEffectFromLegacy = (
   if (effect === 'teeter') return { kind: 'teeter', phase: 'emphasis' }
   return undefined
 }
+
+export const createAnimationTimelineFromLegacy = (
+  animations: readonly LegacyAnimationLike[] = [],
+): AnimationTimeline => ({
+  version: 1,
+  animations: animations.map((animation): TimelineAnimation => {
+    const canonical = canonicalEffectFromLegacy(
+      animation.effect,
+      animation.type,
+      animation.direction,
+      animation.motionPath,
+    )
+    return {
+      id: animation.id,
+      target: {
+        ...animation.target,
+        elementId: animation.target?.groupId ? undefined : animation.elId,
+      },
+      timing: {
+        duration: animation.duration,
+        delay: animation.delay || 0,
+        trigger: animation.trigger === 'meantime'
+          ? 'withPrevious'
+          : animation.trigger === 'auto' ? 'afterPrevious' : 'click',
+        repeatCount: animation.repeatCount,
+        autoReverse: animation.autoReverse,
+        easing: animation.easing,
+      },
+      effect: {
+        class: animation.type === 'motion'
+          ? 'motionPath'
+          : animation.type === 'in' ? 'entrance' : animation.type === 'out' ? 'exit' : 'emphasis',
+        compatibility: canonical ? 'mapped' : 'unsupported',
+        canonical,
+        direction: animation.direction,
+        motionPath: animation.motionPath,
+      },
+    }
+  }),
+})
 
 export const canonicalEffectFromTimeline = (animation: TimelineAnimation) => {
   if (animation.effect.canonical) return animation.effect.canonical

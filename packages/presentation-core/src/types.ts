@@ -1,4 +1,4 @@
-export const CURRENT_PRESENTATION_SCHEMA_VERSION = 3 as const
+export const CURRENT_PRESENTATION_SCHEMA_VERSION = 4 as const
 
 export type PptxMorphMode = 'byObject' | 'byWord' | 'byChar'
 
@@ -108,6 +108,23 @@ export interface TimelineAnimation {
 export interface AnimationTimeline {
   version: 1
   animations: TimelineAnimation[]
+}
+
+/** Framework-neutral shape of the editor's pre-timeline animation model. */
+export interface LegacyAnimationLike {
+  id: string
+  elId: string
+  effect: string
+  direction?: AnimationDirection
+  motionPath?: string
+  target?: TimelineTarget
+  type: 'in' | 'out' | 'attention' | 'motion'
+  duration: number
+  trigger: 'click' | 'meantime' | 'auto'
+  delay?: number
+  repeatCount?: number
+  autoReverse?: boolean
+  easing?: string
 }
 
 export interface MorphableElement {

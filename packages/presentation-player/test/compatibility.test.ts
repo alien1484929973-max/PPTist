@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import JSZip from 'jszip'
 import {
+  PPTIST_PPTX_EMBEDDED_DOCUMENT_PATH,
   PRESENTATION_PLAYER_COMPATIBILITY,
   PRESENTATION_IMAGE_CLIP_PATHS,
   analyzePresentationCompatibility,
@@ -85,6 +87,8 @@ test('schema validation accepts legacy/current documents and rejects future vers
   const base = { width: 1000, height: 562.5, slides: [{ id: 'one', elements: [] }] }
   assert.equal(assertPlayerDocument({ ...base, schemaVersion: 1 }).schemaVersion, 1)
   assert.equal(assertPlayerDocument({ ...base, schemaVersion: 2 }).schemaVersion, 2)
+  assert.equal(assertPlayerDocument({ ...base, schemaVersion: 3 }).schemaVersion, 3)
+  assert.equal(assertPlayerDocument({ ...base, schemaVersion: 4 }).schemaVersion, 4)
   assert.throws(() => assertPlayerDocument({ ...base, schemaVersion: 99 }), /Unsupported presentation schema version/)
 })
 
@@ -98,6 +102,37 @@ test('JSON text, File-like inputs, and parsed objects share one schema gate', as
   assert.equal(parsePlayerDocument(source).slides[0].id, 'one')
   assert.equal((await readPlayerDocument(new Blob([source], { type: 'application/json' }))).schemaVersion, 2)
   assert.throws(() => parsePlayerDocument('{broken'), /Invalid presentation JSON/)
+})
+
+test('PPTX files exported by PPTist expose their embedded web playback document', async () => {
+  const source = JSON.stringify({
+    schemaVersion: 4,
+    width: 1000,
+    height: 562.5,
+    slides: [{
+      id: 'one',
+      elements: [{
+        id: 'widget-one',
+        type: 'widget',
+        widgetId: 'widget-stable-one',
+        left: 100,
+        top: 80,
+        width: 320,
+        height: 180,
+      }],
+    }],
+  })
+  const zip = new JSZip()
+  zip.file(PPTIST_PPTX_EMBEDDED_DOCUMENT_PATH, source)
+  const pptx = await zip.generateAsync({ type: 'uint8array' })
+
+  const document = await readPlayerDocument(pptx)
+  assert.equal(document.slides[0].elements[0].widgetId, 'widget-stable-one')
+
+  const plainPptx = new JSZip()
+  plainPptx.file('ppt/presentation.xml', '<p:presentation/>')
+  const unsupported = await plainPptx.generateAsync({ type: 'uint8array' })
+  await assert.rejects(() => readPlayerDocument(unsupported), /does not contain an embedded PPTist presentation/)
 })
 
 test('resource audit distinguishes portable links from session and host-relative URLs', () => {

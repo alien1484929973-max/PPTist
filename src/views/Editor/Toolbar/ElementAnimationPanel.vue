@@ -215,12 +215,11 @@ import { computed, ref, watch } from 'vue'
 import { nanoid } from 'nanoid'
 import { storeToRefs } from 'pinia'
 import {
-  canonicalEffectFromLegacy,
+  createAnimationTimelineFromLegacy,
   defaultDirectionForEffect,
   normalizeAnimationEffectId,
   type AnimationDirection,
   type TimelineAnimation,
-  type TimelineTrigger,
 } from '@pptist/presentation-core'
 import { useMainStore, useSlidesStore } from '@/store'
 import type { AnimationTrigger, AnimationType, PPTAnimation, PPTElement } from '@/types/slides'
@@ -334,52 +333,32 @@ watch([animationTargetKey, () => currentSlide.value.id], () => {
   activeAnimationId.value = currentSlideAnimations.value.find(animation => animationTargetIds.value.includes(animation.elId))?.id || currentSlideAnimations.value[0]?.id || ''
 }, { immediate: true })
 
-const timelineTrigger = (trigger: AnimationTrigger): TimelineTrigger => {
-  if (trigger === 'meantime') return 'withPrevious'
-  if (trigger === 'auto') return 'afterPrevious'
-  return 'click'
-}
-
 const toTimelineAnimation = (
   animation: PPTAnimation,
   existing?: TimelineAnimation,
 ): TimelineAnimation => {
-  const canonical = canonicalEffectFromLegacy(
-    animation.effect,
-    animation.type,
-    animation.direction,
-    animation.motionPath,
-  )
+  const generated = createAnimationTimelineFromLegacy([animation]).animations[0]
+  const canonical = generated.effect.canonical
   const hasScopedTarget = !!(animation.target?.paragraphRange ||
     animation.target?.characterRange ||
     animation.target?.paragraphIndex !== undefined)
   return {
     ...existing,
-    id: animation.id,
+    ...generated,
     target: {
       ...existing?.target,
-      ...animation.target,
-      elementId: animation.target?.groupId ? undefined : animation.elId,
+      ...generated.target,
     },
     timing: {
-      duration: animation.duration,
-      delay: animation.delay || 0,
-      trigger: timelineTrigger(animation.trigger),
-      repeatCount: animation.repeatCount,
-      autoReverse: animation.autoReverse,
-      easing: animation.easing,
+      ...existing?.timing,
+      ...generated.timing,
     },
     effect: {
       ...existing?.effect,
-      class: animation.type === 'motion'
-        ? 'motionPath'
-        : animation.type === 'in' ? 'entrance' : animation.type === 'out' ? 'exit' : 'emphasis',
+      ...generated.effect,
       compatibility: canonical
         ? hasScopedTarget ? 'approximate' : 'mapped'
         : existing?.effect.compatibility || 'approximate',
-      direction: canonical && 'direction' in canonical ? canonical.direction : undefined,
-      motionPath: animation.type === 'motion' ? animation.motionPath : undefined,
-      canonical,
     },
   }
 }
@@ -450,15 +429,15 @@ const selectedAnimation = computed(() => animationSequence.value.find(animation 
 const selectedAnimationIndex = computed(() => animationSequence.value.findIndex(animation => animation.id === activeAnimationId.value))
 const animationStartOptions = computed(() => selectedAnimationIndex.value === 0
   ? [
-      { label: '单击时', value: 'click' },
-      { label: '与页面切换同时', value: 'meantime' },
-      { label: '页面切换之后', value: 'auto' },
-    ]
+    { label: '单击时', value: 'click' },
+    { label: '与页面切换同时', value: 'meantime' },
+    { label: '页面切换之后', value: 'auto' },
+  ]
   : [
-      { label: '单击时', value: 'click' },
-      { label: '与上一动画同时', value: 'meantime' },
-      { label: '上一动画之后', value: 'auto' },
-    ])
+    { label: '单击时', value: 'click' },
+    { label: '与上一动画同时', value: 'meantime' },
+    { label: '上一动画之后', value: 'auto' },
+  ])
 
 const selectAnimation = (animation: PPTAnimation) => {
   activeAnimationId.value = animation.id

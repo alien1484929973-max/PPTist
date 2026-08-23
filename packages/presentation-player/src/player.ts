@@ -50,8 +50,9 @@ const PLAYER_CSS = `
 .pptist-player-element>*{box-sizing:border-box}
 .pptist-player-widget,.pptist-player-widget-viewport{width:100%;height:100%}
 .pptist-player-widget{position:relative;overflow:hidden}
-.pptist-player-widget-viewport{position:relative;overflow:hidden;scrollbar-width:none;-ms-overflow-style:none;touch-action:pan-x pan-y}
-.pptist-player-widget-viewport::-webkit-scrollbar{display:none;width:0;height:0}
+.pptist-player-widget-viewport{position:relative;overflow:hidden;touch-action:pan-x pan-y}
+.pptist-player-widget-viewport[data-pptist-scrollbar="hidden"]{scrollbar-width:none;-ms-overflow-style:none}
+.pptist-player-widget-viewport[data-pptist-scrollbar="hidden"]::-webkit-scrollbar{display:none;width:0;height:0}
 .pptist-player-widget-internal,.pptist-player-widget-document{overflow:auto}
 .pptist-player-widget-viewport[data-pptist-overscroll="contain"]{overscroll-behavior:contain}
 .pptist-player-widget-viewport[data-pptist-overscroll="handoff"]{overscroll-behavior:auto}

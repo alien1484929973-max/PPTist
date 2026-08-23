@@ -698,6 +698,7 @@ export interface PPTWidgetElement extends PPTBaseElement {
   widgetScroll: {
     mode: 'fit' | 'internal' | 'document'
     overscroll?: 'contain' | 'handoff'
+    scrollbar?: 'hidden' | 'auto'
     intrinsicWidth?: number
     intrinsicHeight?: number
   }

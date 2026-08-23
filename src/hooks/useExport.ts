@@ -1002,7 +1002,7 @@ export default () => {
             pptxSlide.addImage({ ...common, data: getExportImage(el.poster) })
           }
           else {
-            pptxSlide.addText(`网页组件\n${el.widgetId}`, {
+            pptxSlide.addText(`网页组件\n${el.name || '未命名'}`, {
               ...common,
               align: 'center',
               valign: 'middle',
@@ -1045,7 +1045,11 @@ export default () => {
     if (!(content instanceof ArrayBuffer) && !(content instanceof Blob) && !(content instanceof Uint8Array)) {
       throw new Error('PPTX 生成器返回了不支持的文件类型')
     }
-    const file = await postProcessPptxExport(content, _slides)
+    const embeddedPresentation = serializePresentation()
+    const serializedSlides = new Map(embeddedPresentation.slides.map(slide => [slide.id, slide]))
+    embeddedPresentation.slides = _slides.map(slide => serializedSlides.get(slide.id) || slide)
+    embeddedPresentation.lastSlideIndex = 0
+    const file = await postProcessPptxExport(content, embeddedPresentation)
     saveAs(file, `${title.value}.pptx`)
   }
 

@@ -1,73 +1,97 @@
 <template>
   <div class="widget-input">
-    <label>组件 ID</label>
-    <Input v-model:value="widgetId" placeholder="例如 lesson-outline" />
-    <label>版本要求</label>
-    <Input v-model:value="widgetVersion" placeholder="例如 ^1" />
-    <label>内容模式</label>
-    <Select v-model:value="scrollMode" :options="scrollModeOptions" />
-    <label>滚动到边界</label>
-    <Select v-model:value="overscroll" :options="overscrollOptions" :disabled="scrollMode === 'fit'" />
-    <label>挂载时机</label>
-    <Select v-model:value="mountPolicy" :options="mountPolicyOptions" />
+    <Input
+      ref="inputRef"
+      v-model:value="name"
+      :maxlength="60"
+      placeholder="组件名称，例如：课程大纲"
+      @enter="insert"
+    />
+    <div class="options">
+      <div class="option-row">
+        <span>允许长页面滚动</span>
+        <Switch v-model:value="longPage" />
+      </div>
+      <template v-if="longPage">
+        <div class="option-row">
+          <span>显示滚动条</span>
+          <Switch v-model:value="showScrollbar" />
+        </div>
+        <div class="option-row">
+          <span>滚动到边界后允许翻页</span>
+          <Switch v-model:value="handoffAtBoundary" />
+        </div>
+      </template>
+    </div>
     <div class="actions">
       <Button @click="$emit('close')">取消</Button>
-      <Button type="primary" :disabled="!widgetId.trim()" @click="insert">插入</Button>
+      <Button type="primary" :disabled="!name.trim()" @click="insert">
+        <i-icon-park-outline:plus /> 插入
+      </Button>
     </div>
   </div>
 </template>
 
 <script lang="ts" setup>
-import { ref } from 'vue'
-import type { PPTWidgetElement } from '@/types/slides'
+import { nextTick, onMounted, ref } from 'vue'
 import Input from '@/components/Input.vue'
-import Select from '@/components/Select.vue'
 import Button from '@/components/Button.vue'
+import Switch from '@/components/Switch.vue'
 
 const emit = defineEmits<{
   close: []
-  insert: [data: Pick<PPTWidgetElement, 'widgetId' | 'widgetVersion' | 'widgetMountPolicy' | 'widgetInteractive' | 'widgetScroll'>]
+  insert: [options: {
+    name: string
+    longPage: boolean
+    showScrollbar: boolean
+    handoffAtBoundary: boolean
+  }]
 }>()
-const widgetId = ref('')
-const widgetVersion = ref('')
-const scrollMode = ref<'fit' | 'internal' | 'document'>('internal')
-const overscroll = ref<'contain' | 'handoff'>('contain')
-const mountPolicy = ref<'eager' | 'onReveal'>('eager')
-const scrollModeOptions = [
-  { label: '按比例适配', value: 'fit' },
-  { label: '区域内滚动', value: 'internal' },
-  { label: '长页面滚动', value: 'document' },
-]
-const overscrollOptions = [
-  { label: '边界仍由组件接管', value: 'contain' },
-  { label: '边界交给播放器翻页', value: 'handoff' },
-]
-const mountPolicyOptions = [
-  { label: '页面载入即挂载', value: 'eager' },
-  { label: '入场动画时挂载', value: 'onReveal' },
-]
+const name = ref('')
+const longPage = ref(false)
+const showScrollbar = ref(false)
+const handoffAtBoundary = ref(false)
+const inputRef = ref<{ focus: () => void }>()
+
+onMounted(() => nextTick(() => inputRef.value?.focus()))
 
 const insert = () => {
-  if (!widgetId.value.trim()) return
+  const value = name.value.trim()
+  if (!value) return
   emit('insert', {
-    widgetId: widgetId.value.trim(),
-    widgetVersion: widgetVersion.value.trim() || undefined,
-    widgetMountPolicy: mountPolicy.value,
-    widgetInteractive: true,
-    widgetScroll: {
-      mode: scrollMode.value,
-      overscroll: scrollMode.value === 'fit' ? undefined : overscroll.value,
-    },
+    name: value,
+    longPage: longPage.value,
+    showScrollbar: longPage.value && showScrollbar.value,
+    handoffAtBoundary: longPage.value && handoffAtBoundary.value,
   })
 }
 </script>
 
 <style lang="scss" scoped>
 .widget-input {
+  width: 300px;
+  padding: 12px;
+}
+.options {
   display: grid;
   gap: 10px;
-  padding: 20px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #e5e7eb;
 }
-.widget-input label { color: #475569; font-size: 12px; }
-.actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+.option-row {
+  display: flex;
+  min-height: 20px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  color: #334155;
+  font-size: 13px;
+}
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 10px;
+}
 </style>

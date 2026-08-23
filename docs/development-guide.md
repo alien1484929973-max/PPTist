@@ -23,7 +23,7 @@ PPTist 是一个 Vue 3 + TypeScript 的 Web 幻灯片编辑器。本 Fork 额外
 flowchart LR
   UI["Vue 编辑器 / 移动端"] --> Store["Pinia 状态"]
   Store --> Serialize["serializePresentation / migratePresentation"]
-  Serialize --> JSON["schemaVersion = 3 的文稿 JSON"]
+  Serialize --> JSON["schemaVersion = 4 的文稿 JSON"]
   JSON --> Cloud["Cloud API / PostgreSQL JSONB"]
   JSON --> Adapter["PresentationPlayerCanvas"]
   Adapter --> Player["pptist-presentation-player"]
@@ -168,7 +168,7 @@ PostgreSQL 表；首次创建用户时必须提供 `scrypt$...` 格式的管理�
 - `migratePresentation()` 接受旧版本数据并迁移到当前 schema；
 - `applyPresentation()` 将正式文稿安全应用到编辑状态。
 
-当前 `schemaVersion` 为 3，由 `packages/presentation-core/src/types.ts` 定义。正式文稿包含
+当前 `schemaVersion` 为 4，由 `packages/presentation-core/src/types.ts` 定义。正式文稿包含
 标题、画布尺寸、主题、页面和最后播放页。新增持久化字段时必须同时处理：
 
 1. 编辑器类型和默认值；
@@ -307,7 +307,9 @@ PPTX 箭头 preset 的 `adj1` / `adj2` 必须结合形状宽高换算为编辑�
 导入还原不等于导出回写。涉及 PPTX 的问题必须分别标注“导入、编辑器渲染、播放器渲染、
 PPTX 导出”中的哪一层。
 
-标准 PPTX 导出先由 PptxGenJS 创建静态对象，并使用 `pptist:<elementId>` 对象名建立稳定映射；随后 `src/utils/pptxExport.ts` 用 JSZip 写入可兼容的 `p:transition` 和 `p:timing`。导出前必须通过 `analyzePptxExportCompatibility()` 呈现 exact/approximate/flattened/unsupported，不能静默丢弃动画。网页组件只能用 poster 或占位图静态化到普通 PPTX。
+标准 PPTX 导出先由 PptxGenJS 创建静态对象，并使用 `pptist:<elementId>` 对象名建立稳定映射；随后 `src/utils/pptxExport.ts` 用 JSZip 写入可兼容的 `p:transition` 和 `p:timing`。`resolvePptxExportTimeline()` 统一选择正式 `animationTimeline` 或将旧 `animations` 转换为正式时间线，并把组合动画展开到成员对象。OOXML 时间树必须保持 Office 的 `tmRoot -> mainSeq -> click group -> effect` 层级，不能退回平铺 `cTn`；触发映射为 `clickEffect`、`withEffect`、`afterEffect`，飞入方向同时写入 `presetSubtype` 和实际坐标行为。导出前必须通过 `analyzePptxExportCompatibility()` 呈现 exact/approximate/flattened/unsupported，不能静默丢弃动画。网页组件在 PowerPoint 中使用 poster 或占位图静态化，同时完整网页播放文稿写入 PPTX 包内的 `pptist/presentation.json`；包级 Content Type 和 Relationship 由 core 生成，NPM 播放器通过 `readPlayerDocument()` 提取，不能另造旁路 sidecar 文件。
+
+编辑器未显式设置转场时沿用播放器默认的纵向 push；`no/fade/slideX/slideY` 分别导出为 PowerPoint 的 cut/fade/横向 push/纵向 push。浏览器专有的 3D、旋转和缩放转场导出为最接近的标准效果。元素的 appear/fade/wipe/fly/zoom、运动路径、旋转和缩放写入原生行为；float/bounce/pulse 等标记为近似。导入时方向优先读取 effect filter，其次读取 Office `presetSubtype`，以保证再次导出时不丢失飞入方向。
 
 ## 9. 独立播放器
 
@@ -323,7 +325,7 @@ PPTX 导出”中的哪一层。
 播放器必须保持框架无关，不得导入 `src/`、Vue、Pinia 或私有工作区运行时。公共 API 变更时
 同步维护 `src/public.d.ts`、包 README、使用指南、构建验证和独立消费者验证。
 
-同源网页内容使用 `PlayerOptions.widgets` 注册表。文稿中的 `widget` 元素只保存稳定 ID、版本、props、state key、挂载时机和滚动协议；player 统一负责隐藏滚动条及 `contain`/`handoff` 边界仲裁，宿主负责框架挂载和业务数据。
+同源网页内容使用 `PlayerOptions.widgets` 注册表。普通编辑器插入要求友好名称，并自动生成持久化的 `widgetId` 和 state key。宿主先通过 `inspectPresentationRequirements()` 取得每个 `widgetId`、友好名称、页码、元素 ID、尺寸和出现时机，再以精确 `widgetId` 注册实现；名称解析仅作为便捷回退。新建组件默认立即挂载、允许交互，并使用 `fit + contain + hidden`：固定在元素矩形内、鼠标位于组件上时不把滚轮交给播放器。插入时可开启 `document` 长页面滚动、显示滚动条及 `handoff` 边界翻页。版本和延迟挂载等高级字段保留在 schema 中供外部生成器使用。
 
 根应用依赖的是播放器正式包名和已构建 `dist`，而不是 Vite 源码别名。因此修改播放器后，
 在浏览器检查前至少执行：

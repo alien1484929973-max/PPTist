@@ -397,7 +397,7 @@ test('imported block arrows expose their geometric head interval to wipe playbac
   await window.happyDOM.abort()
 })
 
-test('registered widgets expose requirements and keep long-page wheel input inside the widget', async () => {
+test('registered widgets expose requirements and contain long-page wheel input by default', async () => {
   const { window, host } = installDom()
   const {
     createPresentationPlayer,
@@ -414,10 +414,11 @@ test('registered widgets expose requirements and keep long-page wheel input insi
         elements: [{
           id: 'long-widget',
           type: 'widget',
-          widgetId: 'lesson-outline',
+          name: '课程大纲',
+          widgetId: 'widget-auto-1',
           widgetVersion: '^1',
           widgetProps: { title: '课程目录' },
-          widgetScroll: { mode: 'document', overscroll: 'handoff', intrinsicHeight: 720 },
+          widgetScroll: { mode: 'document', overscroll: 'contain', scrollbar: 'auto', intrinsicHeight: 720 },
           left: 100,
           top: 80,
           width: 320,
@@ -428,8 +429,8 @@ test('registered widgets expose requirements and keep long-page wheel input insi
     ],
   }
   const widgets = {
-    'lesson-outline': definePresentationWidget({
-      id: 'lesson-outline',
+    '课程大纲': definePresentationWidget({
+      id: '课程大纲',
       version: '1.4.0',
       render({ container, props }) {
         const content = container.ownerDocument.createElement('button')
@@ -440,12 +441,17 @@ test('registered widgets expose requirements and keep long-page wheel input insi
   }
   const report = inspectPresentationRequirements(document, widgets)
   assert.equal(report.compatible, true)
+  assert.equal(report.requirements[0].widgetId, 'widget-auto-1')
+  assert.equal(report.requirements[0].occurrences[0].name, '课程大纲')
   assert.deepEqual(report.requirements[0].occurrences[0].bounds, {
     left: 100,
     top: 80,
     width: 320,
     height: 180,
   })
+  assert.equal(report.requirements[0].occurrences[0].scrollMode, 'document')
+  assert.equal(report.requirements[0].occurrences[0].overscroll, 'contain')
+  assert.equal(report.requirements[0].occurrences[0].scrollbar, 'auto')
 
   const player = createPresentationPlayer(host, document, {
     widgets,
@@ -454,6 +460,7 @@ test('registered widgets expose requirements and keep long-page wheel input insi
   const viewport = host.querySelector('[data-pptist-scroll="true"]') as HTMLElement
   const content = viewport.querySelector('.pptist-player-widget-content') as HTMLElement
   assert.equal(viewport.tabIndex, 0)
+  assert.equal(viewport.dataset.pptistScrollbar, 'auto')
   assert.equal(content.style.minHeight, '720px')
   Object.defineProperties(viewport, {
     clientHeight: { configurable: true, value: 180 },
@@ -466,6 +473,53 @@ test('registered widgets expose requirements and keep long-page wheel input insi
 
   viewport.scrollTop = 320
   viewport.dispatchEvent(new window.WheelEvent('wheel', { deltaY: 50, bubbles: true, cancelable: true }) as unknown as Event)
+  await new Promise(resolve => setTimeout(resolve, 0))
+  assert.equal(player.state.slideIndex, 0)
+
+  const playerViewport = host.querySelector('.pptist-player-viewport') as HTMLElement
+  playerViewport.dispatchEvent(new window.WheelEvent('wheel', { deltaY: 50, bubbles: true, cancelable: true }) as unknown as Event)
+  await new Promise(resolve => setTimeout(resolve, 0))
+  assert.equal(player.state.slideIndex, 1)
+  player.destroy()
+  await window.happyDOM.abort()
+})
+
+test('widgets without scroll configuration stay fixed and keep wheel input away from the player', async () => {
+  const { window, host } = installDom()
+  const { createPresentationPlayer, definePresentationWidget } = await import('../src/index')
+  const player = createPresentationPlayer(host, {
+    schemaVersion: 4,
+    width: 1000,
+    height: 562.5,
+    slides: [{
+      id: 'one',
+      elements: [{
+        id: 'fixed-widget',
+        type: 'widget',
+        widgetId: 'fixed-widget',
+        left: 0,
+        top: 0,
+        width: 300,
+        height: 180,
+      }],
+    }, { id: 'two', elements: [] }],
+  }, {
+    wheel: { threshold: 20 },
+    widgets: {
+      'fixed-widget': definePresentationWidget({ id: 'fixed-widget', render() {} }),
+    },
+  })
+  const viewport = host.querySelector('.pptist-player-widget-fit') as HTMLElement
+  assert.equal(viewport.dataset.pptistScroll, 'false')
+  assert.equal(viewport.dataset.pptistOverscroll, 'contain')
+  assert.equal(viewport.dataset.pptistScrollbar, 'hidden')
+
+  viewport.dispatchEvent(new window.WheelEvent('wheel', { deltaY: 50, bubbles: true, cancelable: true }) as unknown as Event)
+  await new Promise(resolve => setTimeout(resolve, 0))
+  assert.equal(player.state.slideIndex, 0)
+
+  const playerViewport = host.querySelector('.pptist-player-viewport') as HTMLElement
+  playerViewport.dispatchEvent(new window.WheelEvent('wheel', { deltaY: 50, bubbles: true, cancelable: true }) as unknown as Event)
   await new Promise(resolve => setTimeout(resolve, 0))
   assert.equal(player.state.slideIndex, 1)
   player.destroy()
