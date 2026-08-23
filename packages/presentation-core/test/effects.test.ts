@@ -9,18 +9,18 @@ import {
 } from '../src/index'
 
 const hiddenClip: Record<CardinalDirection, string> = {
-  left: 'inset(0 100% 0 0)',
-  right: 'inset(0 0 0 100%)',
-  up: 'inset(0 0 100% 0)',
-  down: 'inset(100% 0 0 0)',
+  left: 'inset(-2px calc(100% + 2px) -2px -2px)',
+  right: 'inset(-2px -2px -2px calc(100% + 2px))',
+  up: 'inset(-2px -2px calc(100% + 2px) -2px)',
+  down: 'inset(calc(100% + 2px) -2px -2px -2px)',
 }
 
 for (const direction of Object.keys(hiddenClip) as CardinalDirection[]) {
-  test(`wipe ${direction} entrance and exit use a hard clip edge`, () => {
+  test(`wipe ${direction} entrance and exit keep SVG strokes outside the clip box`, () => {
     const entrance = createAnimationPlan({ kind: 'wipe', phase: 'entrance', direction }, { duration: 700, delay: 120, trigger: 'click' })
     assert.deepEqual(entrance.keyframes, [
       { clipPath: hiddenClip[direction] },
-      { clipPath: 'inset(0 0 0 0)' },
+      { clipPath: 'inset(-2px -2px -2px -2px)' },
     ])
     assert.equal(entrance.initialVisibility, 'hidden')
     assert.equal(entrance.finalVisibility, 'visible')
@@ -33,6 +33,18 @@ for (const direction of Object.keys(hiddenClip) as CardinalDirection[]) {
     assert.equal(exit.finalVisibility, 'hidden')
   })
 }
+
+test('wipe plans accept measured padding for thick arrow strokes', () => {
+  const plan = createAnimationPlan(
+    { kind: 'wipe', phase: 'entrance', direction: 'left' },
+    { duration: 500, delay: 0, trigger: 'click' },
+    { clipPadding: 12 },
+  )
+  assert.deepEqual(plan.keyframes, [
+    { clipPath: 'inset(-12px calc(100% + 12px) -12px -12px)' },
+    { clipPath: 'inset(-12px -12px -12px -12px)' },
+  ])
+})
 
 test('animation timing clamps repetition and retains auto-reverse easing', () => {
   const plan = createAnimationPlan(

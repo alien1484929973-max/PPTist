@@ -26,6 +26,7 @@ import { loadGoogleFonts } from '@/utils/font'
 import {
   applyImportedIdentity,
   assignPptxElementSources,
+  pptxArrowKeypointValues,
   transitionTurningMode,
   type SourceAwareElement,
 } from '@/utils/pptxImport'
@@ -1127,9 +1128,16 @@ export default () => {
     
                     const pathFormula = SHAPE_PATH_FORMULAS[shape.pathFormula]
                     if ('editable' in pathFormula && pathFormula.editable) {
-                      let keypointValues = pathFormula.defaultValue
-                      if (el.keypoints) {
-                        let keypoint = 0
+                      let keypointValues = pathFormula.defaultValue ? [...pathFormula.defaultValue] : undefined
+                      const arrowKeypoints = pptxArrowKeypointValues(
+                        el.shapType,
+                        el.keypoints,
+                        el.width,
+                        el.height,
+                      )
+                      if (arrowKeypoints) keypointValues = arrowKeypoints
+                      else if (el.keypoints) {
+                        let keypoint: number | undefined
                         if (el.shapType === 'roundRect') {
                           const val = el.keypoints.adj === undefined ? 0.334 : el.keypoints.adj
                           keypoint = val * 0.5
@@ -1192,9 +1200,14 @@ export default () => {
                           const val = el.keypoints.adj === undefined ? 0.5 : el.keypoints.adj
                           keypoint = 1 - val
                         }
-                        if (pathFormula.range && keypoint < pathFormula.range[0][0]) keypoint = pathFormula.range[0][0]
-                        if (pathFormula.range && keypoint > pathFormula.range[0][1]) keypoint = pathFormula.range[0][1]
-                        keypointValues = [keypoint]
+                        if (keypoint !== undefined) keypointValues = [keypoint]
+                      }
+                      if (keypointValues && pathFormula.range) {
+                        keypointValues = keypointValues.map((value, index) => {
+                          const range = pathFormula.range?.[index]
+                          if (!range) return value
+                          return Math.min(range[1], Math.max(range[0], value))
+                        })
                       }
                       element.path = pathFormula.formula(el.width, el.height, keypointValues)
                       element.keypoints = keypointValues

@@ -105,6 +105,9 @@
       <div class="insert-handler-item" v-tooltip="'插入公式'" @click="latexEditorVisible = true">
         <i-icon-park-outline:formula class="icon" /> <span class="text">公式</span>
       </div>
+      <div class="insert-handler-item" v-tooltip="'插入网页组件'" @click="widgetInputVisible = true">
+        <i-icon-park-outline:application-one class="icon" /> <span class="text">网页组件</span>
+      </div>
       <Popover trigger="click" v-model:value="mediaInputVisible" :offset="10">
         <template #content>
           <MediaInput 
@@ -155,6 +158,12 @@
         @update="data => { createLatexElement(data); latexEditorVisible = false }"
       />
     </Modal>
+    <Modal v-model:visible="widgetInputVisible" :width="440">
+      <WidgetInput
+        @close="widgetInputVisible = false"
+        @insert="data => { createWidgetElement(data); widgetInputVisible = false }"
+      />
+    </Modal>
 
     <Modal
       v-model:visible="svgPathEditorVisible"
@@ -189,6 +198,7 @@ import TableGenerator from './TableGenerator.vue'
 import MediaInput from './MediaInput.vue'
 import SVGPathEditor from './SVGPathEditor.vue'
 import LaTeXEditor from '@/components/LaTeXEditor/index.vue'
+import WidgetInput from './WidgetInput.vue'
 import FileInput from '@/components/FileInput.vue'
 import Modal from '@/components/Modal.vue'
 import Divider from '@/components/Divider.vue'
@@ -227,6 +237,7 @@ const {
   createVideoElement,
   createAudioElement,
   createShapeElement,
+  createWidgetElement,
 } = useCreateElement()
 
 const insertImageElement = async (files: FileList) => {
@@ -252,6 +263,7 @@ const textTypeSelectVisible = ref(false)
 const shapeMenuVisible = ref(false)
 const imageMenuVisible = ref(false)
 const moreVisible = ref(false)
+const widgetInputVisible = ref(false)
 
 // 绘制文字范围
 const drawText = (vertical = false) => {

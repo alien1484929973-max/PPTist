@@ -2,7 +2,7 @@ import { storeToRefs } from 'pinia'
 import { nanoid } from 'nanoid'
 import { useMainStore, useSlidesStore } from '@/store'
 import { getImageSize } from '@/utils/image'
-import type { PPTLineElement, PPTElement, TableCell, TableCellStyle, PPTShapeElement, ChartType, PPTVideoElement, PPTAudioElement } from '@/types/slides'
+import type { PPTLineElement, PPTElement, TableCell, TableCellStyle, PPTShapeElement, ChartType, PPTVideoElement, PPTAudioElement, PPTWidgetElement } from '@/types/slides'
 import { type ShapePoolItem, SHAPE_PATH_FORMULAS } from '@/configs/shapes'
 import type { LinePoolItem } from '@/configs/lines'
 import { CHART_DEFAULT_DATA } from '@/configs/chart'
@@ -222,6 +222,22 @@ export default () => {
     }
     createElement(newElement)
   }
+
+  const createWidgetElement = (data: Pick<PPTWidgetElement, 'widgetId' | 'widgetVersion' | 'widgetMountPolicy' | 'widgetInteractive' | 'widgetScroll'>) => {
+    const width = 520
+    const height = 320
+    createElement({
+      type: 'widget',
+      id: nanoid(10),
+      left: (viewportSize.value - width) / 2,
+      top: (viewportSize.value * viewportRatio.value - height) / 2,
+      width,
+      height,
+      rotate: 0,
+      widgetStateKey: nanoid(10),
+      ...data,
+    })
+  }
   
   /**
    * 创建线条元素
@@ -325,5 +341,6 @@ export default () => {
     createLatexElement,
     createVideoElement,
     createAudioElement,
+    createWidgetElement,
   }
 }

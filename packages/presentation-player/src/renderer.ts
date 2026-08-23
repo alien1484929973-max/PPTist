@@ -11,6 +11,7 @@ import type {
   PlayerSlideBackground,
 } from './types'
 import { renderPresentationChart, type PlayerChartData, type PlayerChartType } from './chart'
+import { renderPresentationWidget } from './widgets'
 import tinycolor from 'tinycolor2'
 import {
   getPresentationLinePath,
@@ -623,7 +624,11 @@ export const renderElement = (
     resolveResourceUrl,
     onCleanup,
   }
-  const renderer = options.renderers?.[element.type] || builtInRenderers[element.type]
+  const renderer = options.renderers?.[element.type] || (
+    element.type === 'widget'
+      ? (widgetContext => renderPresentationWidget(widgetContext, options))
+      : builtInRenderers[element.type]
+  )
   const content = renderer?.(context)
   if (content) root.appendChild(content)
   const supported = !!renderer

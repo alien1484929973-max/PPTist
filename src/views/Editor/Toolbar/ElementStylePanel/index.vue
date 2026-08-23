@@ -5,10 +5,10 @@
 </template>
 
 <script lang="ts" setup>
-import { computed } from 'vue'
+import { computed, type Component } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useMainStore } from '@/store'
-import { ElementTypes } from '@/types/slides'
+import { ElementTypes, type PPTElement } from '@/types/slides'
 
 import TextStylePanel from './TextStylePanel.vue'
 import ImageStylePanel from './ImageStylePanel.vue'
@@ -20,7 +20,7 @@ import LatexStylePanel from './LatexStylePanel.vue'
 import VideoStylePanel from './VideoStylePanel.vue'
 import AudioStylePanel from './AudioStylePanel.vue'
 
-const panelMap = {
+const panelMap: Partial<Record<PPTElement['type'], Component>> = {
   [ElementTypes.TEXT]: TextStylePanel,
   [ElementTypes.IMAGE]: ImageStylePanel,
   [ElementTypes.SHAPE]: ShapeStylePanel,

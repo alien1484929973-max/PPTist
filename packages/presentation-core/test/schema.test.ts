@@ -25,7 +25,7 @@ test('schema migration upgrades v1 documents and clamps their last slide index',
     lastSlideIndex: 20,
   }, defaults)
 
-  assert.equal(migrated.schemaVersion, 2)
+  assert.equal(migrated.schemaVersion, 3)
   assert.equal(migrated.title, 'Legacy')
   assert.equal(migrated.width, 1200)
   assert.equal(migrated.lastSlideIndex, 1)

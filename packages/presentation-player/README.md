@@ -69,7 +69,7 @@ const playerFromFile = createPresentationPlayer(container, documentFromFile)
 
 ## 文稿和兼容性
 
-播放器直接读取 PPTist 文稿 schema，接受无 `schemaVersion` 的旧数据、版本 1 和当前版本 2。未来未知版本会明确报错，避免静默错误渲染。可在加载前调用：
+播放器直接读取 PPTist 文稿 schema，接受无 `schemaVersion` 的旧数据、版本 1、版本 2 和当前版本 3。未来未知版本会明确报错，避免静默错误渲染。可在加载前调用：
 
 ```ts
 import {
@@ -126,6 +126,33 @@ createPresentationPlayer(container, document, {
   },
 })
 ```
+
+同源网页组件优先使用版本化的 `widgets` 注册表。文稿只保存组件 ID、props、位置、挂载时机和滚动协议，宿主负责挂载真实 Vue、React、Canvas 或原生 DOM 实现：
+
+```ts
+import {
+  createPresentationPlayer,
+  definePresentationWidget,
+  inspectPresentationRequirements,
+} from 'pptist-presentation-player'
+
+const widgets = {
+  analytics: definePresentationWidget({
+    id: 'analytics',
+    version: '1.0.0',
+    render({ content, props, onCleanup }) {
+      const handle = mountAnalytics(content, props)
+      onCleanup(() => handle.unmount())
+    },
+  }),
+}
+
+const requirements = inspectPresentationRequirements(document, widgets)
+if (!requirements.compatible) console.error(requirements.issues)
+createPresentationPlayer(container, document, { widgets, wheel: true })
+```
+
+`widgetScroll.mode` 支持 `fit`、`internal` 和 `document`。`fit` 按 intrinsic size 居中等比缩放；`document` 可用 `intrinsicHeight` 声明长页面最小高度。后两种滚动模式隐藏滚动条但保留滚轮、触摸和键盘滚动，组件内部自己的 `overflow: auto/scroll` 区域也会优先消费手势；`overscroll: 'contain'` 在边界继续由组件接管，`handoff` 在边界把后续手势交给播放器翻页。
 
 ## 不可信内容与外部资源
 

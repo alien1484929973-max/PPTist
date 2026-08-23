@@ -62,10 +62,16 @@ export default (
           let keypoint = 0
 
           if (relative === 'center') keypoint = (originPos - moveX * 2) / baseSize
+          else if (relative === 'horizontal_center_top' || relative === 'horizontal_center_bottom') keypoint = (originPos - moveX * 2) / baseSize
+          else if (relative === 'vertical_center_left' || relative === 'vertical_center_right') keypoint = (originPos - moveY * 2) / baseSize
           else if (relative === 'left') keypoint = (originPos + moveX) / baseSize
+          else if (relative === 'left_center') keypoint = (originPos + moveX) / baseSize
           else if (relative === 'right') keypoint = (originPos - moveX) / baseSize
+          else if (relative === 'right_center') keypoint = (originPos - moveX) / baseSize
           else if (relative === 'top') keypoint = (originPos + moveY) / baseSize
+          else if (relative === 'top_center') keypoint = (originPos + moveY) / baseSize
           else if (relative === 'bottom') keypoint = (originPos - moveY) / baseSize
+          else if (relative === 'bottom_center') keypoint = (originPos - moveY) / baseSize
           else if (relative === 'left_bottom') keypoint = (originPos + moveX) / baseSize
           else if (relative === 'right_bottom') keypoint = (originPos - moveX) / baseSize
           else if (relative === 'top_right') keypoint = (originPos + moveY) / baseSize

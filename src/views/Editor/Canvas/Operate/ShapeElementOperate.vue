@@ -77,10 +77,18 @@ const keypoints = computed(() => {
 
     let styles: CSSProperties = {}
     if (relative === 'left') styles = { left: keypointPos * canvasScale.value + 'px' }
+    else if (relative === 'left_center') styles = { left: keypointPos * canvasScale.value + 'px', top: scaleHeight.value / 2 + 'px' }
     else if (relative === 'right') styles = { left: (props.elementInfo.width - keypointPos) * canvasScale.value + 'px' }
+    else if (relative === 'right_center') styles = { left: (props.elementInfo.width - keypointPos) * canvasScale.value + 'px', top: scaleHeight.value / 2 + 'px' }
     else if (relative === 'center') styles = { left: (props.elementInfo.width - keypointPos) / 2 * canvasScale.value + 'px' }
     else if (relative === 'top') styles = { top: keypointPos * canvasScale.value + 'px' }
+    else if (relative === 'top_center') styles = { left: scaleWidth.value / 2 + 'px', top: keypointPos * canvasScale.value + 'px' }
     else if (relative === 'bottom') styles = { top: (props.elementInfo.height - keypointPos) * canvasScale.value + 'px' }
+    else if (relative === 'bottom_center') styles = { left: scaleWidth.value / 2 + 'px', top: (props.elementInfo.height - keypointPos) * canvasScale.value + 'px' }
+    else if (relative === 'horizontal_center_top') styles = { left: (props.elementInfo.width - keypointPos) / 2 * canvasScale.value + 'px', top: 0 }
+    else if (relative === 'horizontal_center_bottom') styles = { left: (props.elementInfo.width - keypointPos) / 2 * canvasScale.value + 'px', top: scaleHeight.value + 'px' }
+    else if (relative === 'vertical_center_left') styles = { left: 0, top: (props.elementInfo.height - keypointPos) / 2 * canvasScale.value + 'px' }
+    else if (relative === 'vertical_center_right') styles = { left: scaleWidth.value + 'px', top: (props.elementInfo.height - keypointPos) / 2 * canvasScale.value + 'px' }
     else if (relative === 'left_bottom') styles = { left: keypointPos * canvasScale.value + 'px', top: props.elementInfo.height * canvasScale.value + 'px' }
     else if (relative === 'right_bottom') styles = { left: (props.elementInfo.width - keypointPos) * canvasScale.value + 'px', top: props.elementInfo.height * canvasScale.value + 'px' }
     else if (relative === 'top_right') styles = { left: props.elementInfo.width * canvasScale.value + 'px', top: keypointPos * canvasScale.value + 'px' }

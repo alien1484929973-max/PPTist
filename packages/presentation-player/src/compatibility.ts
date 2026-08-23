@@ -25,6 +25,7 @@ export const PRESENTATION_PLAYER_COMPATIBILITY: readonly CompatibilityMatrixEntr
   { id: 'charts', feature: '图表', status: 'supported', baseline: 'Chart/ECharts SVG', notes: '内置 bar/column/line/area/pie/ring/radar/scatter；与编辑器共享选项生成器。' },
   { id: 'latex', feature: 'LaTeX', status: 'supported', baseline: 'BaseLatexElement', notes: '按保存的 SVG path 渲染，无需运行时公式引擎。' },
   { id: 'media', feature: '音频和视频', status: 'supported', baseline: 'ScreenVideo/AudioElement', notes: '原生媒体控件、poster、autoplay 与 loop；受浏览器自动播放策略约束。' },
+  { id: 'widgets', feature: '同页网页组件', status: 'adapter', baseline: 'PlayerOptions.widgets', notes: '宿主注册原生组件；播放器负责位置、动画、隐藏滚动条和滚轮边界交还。' },
   { id: 'groups', feature: '组合', status: 'supported', baseline: 'DOM player grouped render', notes: '同 groupId 共享动画目标并保持成员层级。' },
   { id: 'links', feature: '网页和页内链接', status: 'supported', baseline: 'DOM player element links', notes: '网页使用 noopener/noreferrer，新页链接按 slide id 跳转。' },
   { id: 'scoped-animation', feature: '段落/字符动画', status: 'supported', baseline: 'presentation-core DOM targets', notes: '目标拆分和清理由共享动画核心提供。' },
@@ -36,7 +37,7 @@ export const PRESENTATION_PLAYER_COMPATIBILITY: readonly CompatibilityMatrixEntr
 ] as const
 
 const BUILT_IN_ELEMENTS = new Set<PlayerElementType>([
-  'text', 'image', 'shape', 'line', 'table', 'latex', 'video', 'audio', 'chart',
+  'text', 'image', 'shape', 'line', 'table', 'latex', 'video', 'audio', 'chart', 'widget',
 ])
 const SUPPORTED_TRANSITIONS = new Set(['none', 'cut', 'fade', 'dissolve', 'push', 'wipe', 'cover', 'uncover', 'pull', 'morph'])
 

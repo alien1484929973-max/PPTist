@@ -37,7 +37,7 @@ export default {
 import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useMainStore } from '@/store'
-import type { PPTVideoElement, PPTLatexElement, PPTAudioElement, PPTChartElement } from '@/types/slides'
+import type { PPTVideoElement, PPTLatexElement, PPTAudioElement, PPTChartElement, PPTWidgetElement } from '@/types/slides'
 import type { OperateResizeHandlers } from '@/types/edit'
 import useCommonOperate from '../hooks/useCommonOperate'
 
@@ -45,7 +45,7 @@ import RotateHandler from './RotateHandler.vue'
 import ResizeHandler from './ResizeHandler.vue'
 import BorderLine from './BorderLine.vue'
 
-type PPTElement = PPTVideoElement | PPTLatexElement | PPTAudioElement | PPTChartElement
+type PPTElement = PPTVideoElement | PPTLatexElement | PPTAudioElement | PPTChartElement | PPTWidgetElement
 
 const props = defineProps<{
   elementInfo: PPTElement

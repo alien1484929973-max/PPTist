@@ -13,6 +13,9 @@ import type {
   PlayerResourceReport,
   PlayerSlide,
   PlayerState,
+  PlayerWidgetRequirementReport,
+  PresentationWidgetDefinition,
+  PresentationWidgetRegistry,
   PresentationPlayer,
 } from './types'
 
@@ -48,8 +51,8 @@ export declare const renderPresentationChart: (
 ) => PlayerChartHandle
 
 export declare const PRESENTATION_IMAGE_CLIP_PATHS: Readonly<Record<string, string>>
-export declare const CURRENT_PLAYER_SCHEMA_VERSION: 2
-export declare const SUPPORTED_PLAYER_SCHEMA_VERSIONS: readonly [1, 2]
+export declare const CURRENT_PLAYER_SCHEMA_VERSION: 3
+export declare const SUPPORTED_PLAYER_SCHEMA_VERSIONS: readonly [1, 2, 3]
 export declare const validatePlayerDocument: (input: unknown) => string[]
 export declare const assertPlayerDocument: (input: unknown) => PlayerDocument
 export declare const parsePlayerDocument: (input: unknown) => PlayerDocument
@@ -93,6 +96,16 @@ export declare const timelineFromLegacyAnimations: (
 ) => PlayerAnimationTimeline
 
 export declare const timelineForSlide: (slide: PlayerSlide) => PlayerAnimationTimeline
+
+export declare const definePresentationWidget: <T extends PresentationWidgetDefinition>(definition: T) => T
+export declare const isPresentationWidgetVersionCompatible: (
+  requested: string | undefined,
+  provided: string | undefined,
+) => boolean
+export declare const inspectPresentationRequirements: (
+  presentation: PlayerDocument,
+  registry?: PresentationWidgetRegistry,
+) => PlayerWidgetRequirementReport
 
 export declare class DomPresentationPlayer implements PresentationPlayer {
   constructor(host: HTMLElement, options?: PlayerOptions)

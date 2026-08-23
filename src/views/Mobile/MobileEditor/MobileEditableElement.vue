@@ -27,6 +27,7 @@ import TableElement from '@/views/components/element/TableElement/index.vue'
 import LatexElement from '@/views/components/element/LatexElement/index.vue'
 import VideoElement from '@/views/components/element/VideoElement/index.vue'
 import AudioElement from '@/views/components/element/AudioElement/index.vue'
+import WidgetElement from '@/views/components/element/WidgetElement/index.vue'
 
 const props = defineProps<{
   elementInfo: PPTElement
@@ -45,6 +46,7 @@ const currentElementComponent = computed<unknown>(() => {
     [ElementTypes.LATEX]: LatexElement,
     [ElementTypes.VIDEO]: VideoElement,
     [ElementTypes.AUDIO]: AudioElement,
+    [ElementTypes.WIDGET]: WidgetElement,
   }
   return elementTypeMap[props.elementInfo.type] || null
 })

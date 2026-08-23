@@ -1,6 +1,6 @@
 import type { Ref } from 'vue'
 import { storeToRefs } from 'pinia'
-import { useMainStore, useSlidesStore, useKeyboardStore } from '@/store'
+import { useMainStore, useSlidesStore } from '@/store'
 import type { PPTElement, PPTImageElement, PPTLineElement, PPTShapeElement } from '@/types/slides'
 import { OperateResizeHandlers, type AlignmentLineProps, type MultiSelectRange } from '@/types/edit'
 import { MIN_SIZE } from '@/configs/element'
@@ -138,7 +138,6 @@ export default (
   const slidesStore = useSlidesStore()
   const { activeElementIdList, activeGroupElementId } = storeToRefs(mainStore)
   const { viewportRatio, viewportSize } = storeToRefs(slidesStore)
-  const { ctrlOrShiftKeyActive } = storeToRefs(useKeyboardStore())
 
   const { addHistorySnapshot } = useHistorySnapshot()
 
@@ -160,7 +159,9 @@ export default (
     const elRotate = ('rotate' in element && element.rotate) ? element.rotate : 0
     const rotateRadian = Math.PI * elRotate / 180
 
-    const fixedRatio = ctrlOrShiftKeyActive.value || ('fixedRatio' in element && element.fixedRatio)
+    const elementFixedRatio = 'fixedRatio' in element && !!element.fixedRatio
+    let fixedRatio = elementFixedRatio || (e instanceof MouseEvent && e.shiftKey)
+    let snappingEnabled = true
     const aspectRatio = elOriginWidth / elOriginHeight
 
     const startPageX = isTouchEvent ? e.changedTouches[0].pageX : e.pageX
@@ -251,6 +252,11 @@ export default (
       const _alignmentLines: AlignmentLineProps[] = []
       const correctionVal = { offsetX: 0, offsetY: 0 }
 
+      if (!snappingEnabled) {
+        alignmentLines.value = []
+        return correctionVal
+      }
+
       const threshold = getAlignmentThreshold(canvasScale.value)
       const guidePadding = getAlignmentGuidePadding(canvasScale.value)
       const pointX = currentX ?? 0
@@ -293,6 +299,9 @@ export default (
 
     const handleMousemove = (e: MouseEvent | TouchEvent) => {
       if (!isMouseDown) return
+
+      fixedRatio = elementFixedRatio || (e instanceof MouseEvent && e.shiftKey)
+      snappingEnabled = !(e instanceof MouseEvent && e.altKey)
 
       const currentPageX = e instanceof MouseEvent ? e.pageX : e.changedTouches[0].pageX
       const currentPageY = e instanceof MouseEvent ? e.pageY : e.changedTouches[0].pageY
@@ -580,7 +589,7 @@ export default (
       let y = (currentPageY - startPageY) / canvasScale.value
 
       // 锁定宽高比例，逻辑同上
-      if (ctrlOrShiftKeyActive.value) {
+      if (e.shiftKey) {
         if (command === OperateResizeHandlers.RIGHT_BOTTOM || command === OperateResizeHandlers.LEFT_TOP) y = x / aspectRatio
         if (command === OperateResizeHandlers.LEFT_BOTTOM || command === OperateResizeHandlers.RIGHT_TOP) y = -x / aspectRatio
       }

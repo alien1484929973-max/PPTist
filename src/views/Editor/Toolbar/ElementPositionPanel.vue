@@ -29,7 +29,7 @@
     <div class="row">
       <NumberInput
         :min="-1000"
-        :step="5"
+        :step="1"
         :value="left"
         @update:value="value => updateLeft(value)"
         style="width: 45%;"
@@ -41,7 +41,7 @@
       <div style="width: 10%;"></div>
       <NumberInput
         :min="-1000"
-        :step="5"
+        :step="1"
         :value="top"
         @update:value="value => updateTop(value)"
         style="width: 45%;"
@@ -57,7 +57,7 @@
         <NumberInput
           :min="minSize"
           :max="1500"
-          :step="5"
+          :step="1"
           :disabled="isAutoWidthText"
           :value="width"
           @update:value="value => updateWidth(value)"
@@ -77,7 +77,7 @@
         <NumberInput 
           :min="minSize"
           :max="800"
-          :step="5"
+          :step="1"
           :disabled="isAutoHeightText || handleElement!.type === 'table'"
           :value="height" 
           @update:value="value => updateHeight(value)"
@@ -97,7 +97,7 @@
         <NumberInput 
           :min="-180"
           :max="180"
-          :step="5"
+          :step="1"
           :value="rotate" 
           @update:value="value => updateRotate(value)" 
           style="width: 45%;" 
@@ -156,15 +156,15 @@ const isAutoWidthText = computed(() => {
 watch(handleElement, () => {
   if (!handleElement.value) return
 
-  left.value = round(handleElement.value.left, 1)
-  top.value = round(handleElement.value.top, 1)
+  left.value = round(handleElement.value.left, 2)
+  top.value = round(handleElement.value.top, 2)
 
   fixedRatio.value = 'fixedRatio' in handleElement.value && !!handleElement.value.fixedRatio
 
   if (handleElement.value.type !== 'line') {
-    width.value = round(handleElement.value.width, 1)
-    height.value = round(handleElement.value.height, 1)
-    rotate.value = 'rotate' in handleElement.value && handleElement.value.rotate !== undefined ? round(handleElement.value.rotate, 1) : 0
+    width.value = round(handleElement.value.width, 2)
+    height.value = round(handleElement.value.height, 2)
+    rotate.value = 'rotate' in handleElement.value && handleElement.value.rotate !== undefined ? round(handleElement.value.rotate, 2) : 0
   }
 }, { deep: true, immediate: true })
 

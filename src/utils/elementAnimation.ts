@@ -1,6 +1,7 @@
 import {
   canonicalEffectFromLegacy,
   createAnimationPlan,
+  measureDomAnimationClipPadding,
   resolveDomAnimationTargets,
   runDomAnimation,
   setDomAnimationFinalState,
@@ -145,7 +146,10 @@ export const runElementAnimation = (
   context: ElementAnimationContext = {},
 ): ElementAnimationHandle => {
   const targets = context.targets || resolveDomAnimationTargets(element, animation.target)
-  const nativeHandles = nativeAnimations(targets.elements, animation, context)
+  const nativeHandles = nativeAnimations(targets.elements, animation, {
+    ...context,
+    clipPadding: context.clipPadding ?? measureDomAnimationClipPadding(targets.elements),
+  })
   const handles = nativeHandles || targets.elements.map(target => legacyAnimation(target, animation))
   return combineHandles(handles, targets.cleanup)
 }
@@ -184,7 +188,7 @@ export const setElementAnimationFinalState = (
       delay: 0,
       trigger: 'click',
       autoReverse: animation.autoReverse,
-    })
+    }, { clipPadding: measureDomAnimationClipPadding(targets.elements) })
     for (const target of targets.elements) setDomAnimationFinalState(target, plan)
   }
   else if (animation.type === 'out') {

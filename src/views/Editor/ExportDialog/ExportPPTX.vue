@@ -62,6 +62,11 @@
         <div class="tip" v-if="!ignoreMedia">
           提示：1. 支持导出格式：avi、mp4、mov、wmv、mp3、wav；2. 跨域资源无法导出。
         </div>
+        <div class="compatibility" :class="`status-${compatibility.status}`">
+          <strong>动画兼容性：{{ compatibilityLabel }}</strong>
+          <span>精确 {{ compatibility.counts.exact }} · 近似 {{ compatibility.counts.approximate }} · 静态化 {{ compatibility.counts.flattened }} · 不支持 {{ compatibility.counts.unsupported }}</span>
+          <small v-if="compatibility.issues.length">{{ compatibility.issues[0].message }}</small>
+        </div>
       </template>
     </div>
     <div class="btns">
@@ -77,6 +82,7 @@
 import { computed, ref, useTemplateRef } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useSlidesStore } from '@/store'
+import { analyzePptxExportCompatibility } from '@pptist/presentation-core'
 import useExport from '@/hooks/useExport'
 
 import ThumbnailSlide from '@/views/components/ThumbnailSlide/index.vue'
@@ -115,6 +121,13 @@ const renderSlides = computed(() => {
   if (exportMode.value === 'standard') return []
   return selectedSlides.value
 })
+const compatibility = computed(() => analyzePptxExportCompatibility(selectedSlides.value))
+const compatibilityLabel = computed(() => ({
+  exact: '精确',
+  approximate: '包含近似效果',
+  flattened: '包含静态化内容',
+  unsupported: '包含无法导出的动画',
+}[compatibility.value.status]))
 
 const execExport = () => {
   if (exportMode.value === 'standard') {
@@ -181,6 +194,19 @@ const execExport = () => {
     color: #aaa;
     line-height: 1.8;
     margin-top: 10px;
+  }
+
+  .compatibility {
+    display: grid;
+    gap: 4px;
+    padding: 9px 10px;
+    border-left: 3px solid #22c55e;
+    background: #f8fafc;
+    font-size: 11px;
+
+    span, small { color: #64748b; }
+    &.status-approximate { border-color: #f59e0b; }
+    &.status-flattened, &.status-unsupported { border-color: #ef4444; }
   }
 }
 .btns {

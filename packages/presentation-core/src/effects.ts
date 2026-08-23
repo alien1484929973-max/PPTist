@@ -30,6 +30,7 @@ export interface AnimationPlan {
 export interface AnimationPlanContext {
   viewportWidth?: number
   viewportHeight?: number
+  clipPadding?: number
 }
 
 const CARDINAL_DIRECTIONS: readonly CardinalDirection[] = ['left', 'right', 'up', 'down']
@@ -44,12 +45,20 @@ const FLY_DIRECTIONS: readonly AnimationDirection[] = [
   'bottomRight',
 ]
 
-const fullClip = 'inset(0 0 0 0)'
-const wipeClip: Record<CardinalDirection, string> = {
-  left: 'inset(0 100% 0 0)',
-  right: 'inset(0 0 0 100%)',
-  up: 'inset(0 0 100% 0)',
-  down: 'inset(100% 0 0 0)',
+const wipeClips = (direction: CardinalDirection, clipPadding = 2) => {
+  const padding = Number.isFinite(clipPadding) ? Math.max(0, clipPadding) : 2
+  const outside = `-${padding}px`
+  const collapsed = `calc(100% + ${padding}px)`
+  const hidden: Record<CardinalDirection, string> = {
+    left: `inset(${outside} ${collapsed} ${outside} ${outside})`,
+    right: `inset(${outside} ${outside} ${outside} ${collapsed})`,
+    up: `inset(${outside} ${outside} ${collapsed} ${outside})`,
+    down: `inset(${collapsed} ${outside} ${outside} ${outside})`,
+  }
+  return {
+    hidden: hidden[direction],
+    visible: `inset(${outside} ${outside} ${outside} ${outside})`,
+  }
 }
 
 const directionVector: Record<AnimationDirection, [number, number]> = {
@@ -123,9 +132,10 @@ export const createAnimationPlan = (
   }
   else if (effect.kind === 'fade') keyframes = [{ opacity: 0 }, { opacity: 1 }]
   else if (effect.kind === 'wipe') {
+    const clips = wipeClips(effect.direction, context.clipPadding)
     keyframes = [
-      { clipPath: wipeClip[effect.direction] },
-      { clipPath: fullClip },
+      { clipPath: clips.hidden },
+      { clipPath: clips.visible },
     ]
   }
   else if (effect.kind === 'fly') {

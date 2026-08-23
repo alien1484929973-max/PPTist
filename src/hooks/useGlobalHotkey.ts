@@ -30,7 +30,7 @@ export default () => {
     showSearchPanel,
   } = storeToRefs(mainStore)
   const { currentSlide } = storeToRefs(useSlidesStore())
-  const { ctrlKeyState, shiftKeyState, spaceKeyState } = storeToRefs(keyboardStore)
+  const { ctrlKeyState, shiftKeyState } = storeToRefs(keyboardStore)
 
   const {
     updateSlideIndex,
@@ -92,8 +92,8 @@ export default () => {
     else if (thumbnailsFocus.value) deleteSlide()
   }
 
-  const move = (key: string) => {
-    if (activeElementIdList.value.length) moveElement(key)
+  const move = (key: string, step: number) => {
+    if (activeElementIdList.value.length) moveElement(key, step)
     else if (key === KEYS.UP || key === KEYS.DOWN) updateSlideIndex(key)
   }
 
@@ -241,25 +241,26 @@ export default () => {
       e.preventDefault()
       remove()
     }
+    const moveStep = ctrlOrMetaKeyActive ? 0.1 : shiftKey ? 10 : 1
     if (key === KEYS.UP) {
       if (disableHotkeys.value) return
       e.preventDefault()
-      move(KEYS.UP)
+      move(KEYS.UP, moveStep)
     }
     if (key === KEYS.DOWN) {
       if (disableHotkeys.value) return
       e.preventDefault()
-      move(KEYS.DOWN)
+      move(KEYS.DOWN, moveStep)
     }
     if (key === KEYS.LEFT) {
       if (disableHotkeys.value) return
       e.preventDefault()
-      move(KEYS.LEFT)
+      move(KEYS.LEFT, moveStep)
     }
     if (key === KEYS.RIGHT) {
       if (disableHotkeys.value) return
       e.preventDefault()
-      move(KEYS.RIGHT)
+      move(KEYS.RIGHT, moveStep)
     }
     if (key === KEYS.PAGEUP) {
       if (disableHotkeys.value) return
@@ -307,10 +308,16 @@ export default () => {
     }
   }
   
-  const keyupListener = () => {
-    if (ctrlKeyState.value) keyboardStore.setCtrlKeyState(false)
-    if (shiftKeyState.value) keyboardStore.setShiftKeyState(false)
-    if (spaceKeyState.value) keyboardStore.setSpaceKeyState(false)
+  const keyupListener = (event?: KeyboardEvent | Event) => {
+    if (!(event instanceof KeyboardEvent)) {
+      keyboardStore.setCtrlKeyState(false)
+      keyboardStore.setShiftKeyState(false)
+      keyboardStore.setSpaceKeyState(false)
+      return
+    }
+    if (event.key === 'Control' || event.key === 'Meta') keyboardStore.setCtrlKeyState(false)
+    if (event.key === 'Shift') keyboardStore.setShiftKeyState(false)
+    if (event.key === ' ') keyboardStore.setSpaceKeyState(false)
   }
 
   onMounted(() => {

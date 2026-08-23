@@ -2,7 +2,7 @@ import type { AlignmentLineProps } from '@/types/edit'
 import type { AlignLine } from '@/utils/element'
 
 const MIN_CANVAS_SCALE = 0.01
-const ALIGNMENT_THRESHOLD_PX = 6
+const ALIGNMENT_THRESHOLD_PX = 4
 const ALIGNMENT_GUIDE_PADDING_PX = 12
 const DISTANCE_EPSILON = 0.000001
 

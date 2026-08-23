@@ -149,6 +149,20 @@ export interface PlayerElement {
   loop?: boolean
   ext?: string
   fixedRatio?: boolean
+  /** Stable host-owned widget identifier resolved through PlayerOptions.widgets. */
+  widgetId?: string
+  /** Optional version requirement such as "1.2.0", "^1" or "1.x". */
+  widgetVersion?: string
+  /** Serializable props passed to the registered widget implementation. */
+  widgetProps?: Record<string, unknown>
+  /** Stable key used by host applications to persist widget state across renders. */
+  widgetStateKey?: string
+  /** Mount immediately or wait until an entrance animation reveals the element. */
+  widgetMountPolicy?: PlayerWidgetMountPolicy
+  /** Whether pointer, keyboard and wheel input belongs to the embedded widget. */
+  widgetInteractive?: boolean
+  /** Controls sizing and long-content scrolling inside the fixed slide rectangle. */
+  widgetScroll?: PlayerWidgetScrollOptions
   /** Application-owned serializable payload consumed by a custom renderer. */
   customData?: Record<string, unknown>
 }
@@ -283,6 +297,74 @@ export interface ElementRendererContext {
 }
 
 export type PlayerElementRenderer = (context: ElementRendererContext) => HTMLElement | SVGElement | void
+export type PlayerWidgetMountPolicy = 'eager' | 'onReveal'
+export type PlayerWidgetScrollMode = 'fit' | 'internal' | 'document'
+export type PlayerWidgetOverscrollBehavior = 'contain' | 'handoff'
+
+export interface PlayerWidgetScrollOptions {
+  /** fit scales a fixed intrinsic surface; internal/document preserve native pixels and allow vertical overflow. */
+  mode: PlayerWidgetScrollMode
+  /** Boundary behavior for presentation wheel navigation. Defaults to contain. */
+  overscroll?: PlayerWidgetOverscrollBehavior
+  /** Design width used by fit mode. Defaults to the element box. */
+  intrinsicWidth?: number
+  /** Design height for fit mode, or minimum long-page height for document mode. */
+  intrinsicHeight?: number
+}
+
+export interface PlayerWidgetRendererContext extends ElementRendererContext {
+  widgetId: string
+  widgetVersion?: string
+  props: Readonly<Record<string, unknown>>
+  stateKey: string
+  scrollMode: PlayerWidgetScrollMode
+  viewport: HTMLElement
+  content: HTMLElement
+}
+
+export interface PresentationWidgetDefinition {
+  id: string
+  version?: string
+  render: (context: PlayerWidgetRendererContext) => HTMLElement | SVGElement | void
+}
+
+export type PresentationWidgetRegistry = Record<string, PresentationWidgetDefinition>
+
+export interface PlayerWidgetOccurrence {
+  slideIndex: number
+  slideId: string
+  elementId: string
+  bounds: { left: number; top: number; width: number; height: number }
+  stateKey: string
+  scrollMode: PlayerWidgetScrollMode
+  mountPolicy: PlayerWidgetMountPolicy
+  interactive: boolean
+  reveal: 'slide' | 'animation'
+  animationId?: string
+}
+
+export interface PlayerWidgetRequirement {
+  widgetId: string
+  requestedVersions: string[]
+  occurrences: PlayerWidgetOccurrence[]
+}
+
+export interface PlayerWidgetIssue {
+  code: 'missing-widget-id' | 'missing-widget' | 'version-mismatch'
+  severity: 'warning' | 'blocking'
+  widgetId?: string
+  requestedVersion?: string
+  providedVersion?: string
+  slideId: string
+  elementId: string
+  message: string
+}
+
+export interface PlayerWidgetRequirementReport {
+  compatible: boolean
+  requirements: PlayerWidgetRequirement[]
+  issues: PlayerWidgetIssue[]
+}
 export type PlayerResourceKind = 'image' | 'media' | 'poster' | 'pattern' | 'background' | 'link'
 
 export type PlayerResourceClassification = 'remote' | 'relative' | 'embedded' | 'session' | 'unsupported' | 'missing'
@@ -351,6 +433,8 @@ export interface PlayerOptions {
   className?: string
   showUnsupported?: boolean
   renderers?: Record<string, PlayerElementRenderer>
+  /** Framework-neutral registry for native same-page widgets stored as type="widget" elements. */
+  widgets?: PresentationWidgetRegistry
   /** PPTist text is HTML. Supply a sanitizer when documents are not trusted. */
   sanitizeHtml?: (html: string) => string
   /** Resolve relative media URLs against the JSON document's original location. */
@@ -359,6 +443,7 @@ export interface PlayerOptions {
   resolveResourceUrl?: (url: string, kind: PlayerResourceKind) => string | null
   onStateChange?: (state: PlayerState) => void
   onUnsupportedElement?: (element: PlayerElement) => void
+  onWidgetIssue?: (issue: PlayerWidgetIssue) => void
 }
 
 export interface PresentationPlayer {

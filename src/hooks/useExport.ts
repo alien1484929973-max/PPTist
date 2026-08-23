@@ -15,6 +15,7 @@ import { svg2Base64 } from '@/utils/svg2Base64'
 import { ExportImageDownloadError, preloadExportImages } from '@/utils/exportImage'
 import message from '@/utils/message'
 import { serializePresentation } from '@/utils/presentation'
+import { postProcessPptxExport, pptistPptxObjectName } from '@/utils/pptxExport'
 
 import BaseLatexElement from '@/views/components/element/LatexElement/BaseLatexElement.vue'
 import BaseShapeElement from '@/views/components/element/ShapeElement/BaseShapeElement.vue'
@@ -481,6 +482,7 @@ export default () => {
         if (element.type === 'image') sources.push(element.src)
         else if (element.type === 'shape' && element.pattern) sources.push(element.pattern)
         else if (!ignoreMedia && element.type === 'video' && element.poster) sources.push(element.poster)
+        else if (element.type === 'widget' && element.poster) sources.push(element.poster)
       }
     }
     return sources
@@ -562,6 +564,7 @@ export default () => {
           const inset = el.inset || [10, 10, 10, 10]
 
           const options: pptxgen.TextPropsOptions = {
+            objectName: pptistPptxObjectName(el.id),
             x: el.left / ratioPx2Inch.value,
             y: el.top / ratioPx2Inch.value,
             w: el.width / ratioPx2Inch.value,
@@ -596,6 +599,7 @@ export default () => {
 
         else if (el.type === 'image') {
           const options: pptxgen.ImageProps = {
+            objectName: pptistPptxObjectName(el.id),
             data: getExportImage(el.src),
             x: el.left / ratioPx2Inch.value,
             y: el.top / ratioPx2Inch.value,
@@ -648,6 +652,7 @@ export default () => {
             if (!base64SVG) continue
 
             const options: pptxgen.ImageProps = {
+              objectName: pptistPptxObjectName(el.id),
               data: base64SVG,
               x: el.left / ratioPx2Inch.value,
               y: el.top / ratioPx2Inch.value,
@@ -683,6 +688,7 @@ export default () => {
             const opacity = el.opacity === undefined ? 1 : el.opacity
   
             const options: pptxgen.ShapeProps = {
+              objectName: pptistPptxObjectName(el.id),
               x: el.left / ratioPx2Inch.value,
               y: el.top / ratioPx2Inch.value,
               w: el.width / ratioPx2Inch.value,
@@ -707,6 +713,7 @@ export default () => {
             const inset = el.text.inset || [10, 10, 10, 10]
 
             const options: pptxgen.TextPropsOptions = {
+              objectName: `pptist:text:${el.id}`,
               x: el.left / ratioPx2Inch.value,
               y: el.top / ratioPx2Inch.value,
               w: el.width / ratioPx2Inch.value,
@@ -726,6 +733,7 @@ export default () => {
           }
           if (el.pattern) {
             const options: pptxgen.ImageProps = {
+              objectName: `pptist:pattern:${el.id}`,
               data: getExportImage(el.pattern),
               x: el.left / ratioPx2Inch.value,
               y: el.top / ratioPx2Inch.value,
@@ -752,6 +760,7 @@ export default () => {
           const c = formatColor(el.color)
 
           const options: pptxgen.ShapeProps = {
+            objectName: pptistPptxObjectName(el.id),
             x: el.left / ratioPx2Inch.value,
             y: el.top / ratioPx2Inch.value,
             w: (maxX - minX) / ratioPx2Inch.value,
@@ -792,6 +801,7 @@ export default () => {
           }
           
           const options: pptxgen.IChartOpts = {
+            objectName: pptistPptxObjectName(el.id),
             x: el.left / ratioPx2Inch.value,
             y: el.top / ratioPx2Inch.value,
             w: el.width / ratioPx2Inch.value,
@@ -935,6 +945,7 @@ export default () => {
           }
 
           const options: pptxgen.TableProps = {
+            objectName: pptistPptxObjectName(el.id),
             x: el.left / ratioPx2Inch.value,
             y: el.top / ratioPx2Inch.value,
             w: el.width / ratioPx2Inch.value,
@@ -964,6 +975,7 @@ export default () => {
           if (!base64SVG) continue
 
           const options: pptxgen.ImageProps = {
+            objectName: pptistPptxObjectName(el.id),
             data: base64SVG,
             x: el.left / ratioPx2Inch.value,
             y: el.top / ratioPx2Inch.value,
@@ -978,8 +990,34 @@ export default () => {
           pptxSlide.addImage(options)
         }
         
+        else if (el.type === 'widget') {
+          const common = {
+            objectName: pptistPptxObjectName(el.id),
+            x: el.left / ratioPx2Inch.value,
+            y: el.top / ratioPx2Inch.value,
+            w: el.width / ratioPx2Inch.value,
+            h: el.height / ratioPx2Inch.value,
+          }
+          if (el.poster) {
+            pptxSlide.addImage({ ...common, data: getExportImage(el.poster) })
+          }
+          else {
+            pptxSlide.addText(`网页组件\n${el.widgetId}`, {
+              ...common,
+              align: 'center',
+              valign: 'middle',
+              color: '475569',
+              fontSize: 14,
+              fill: { color: 'F8FAFC' },
+              line: { color: '94A3B8', dashType: 'dash' },
+              margin: 8,
+            })
+          }
+        }
+
         else if (!ignoreMedia && (el.type === 'video' || el.type === 'audio')) {
           const options: pptxgen.MediaProps = {
+            objectName: pptistPptxObjectName(el.id),
             x: el.left / ratioPx2Inch.value,
             y: el.top / ratioPx2Inch.value,
             w: el.width / ratioPx2Inch.value,
@@ -1003,7 +1041,12 @@ export default () => {
     }
 
     await new Promise(resolve => setTimeout(resolve, 200))
-    await pptx.writeFile({ fileName: `${title.value}.pptx` })
+    const content = await pptx.write({ outputType: 'arraybuffer' })
+    if (!(content instanceof ArrayBuffer) && !(content instanceof Blob) && !(content instanceof Uint8Array)) {
+      throw new Error('PPTX 生成器返回了不支持的文件类型')
+    }
+    const file = await postProcessPptxExport(content, _slides)
+    saveAs(file, `${title.value}.pptx`)
   }
 
   const exportPPTX = (_slides: Slide[], masterOverwrite: boolean, ignoreMedia: boolean) => {

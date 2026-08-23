@@ -58,17 +58,7 @@ export default (
 
       angle = getAngleFromCoordinate(x, y)
 
-      // 靠近45倍数的角度时有吸附效果
-      const sorptionRange = 5
-      if ( Math.abs(angle) <= sorptionRange ) angle = 0
-      else if ( angle > 0 && Math.abs(angle - 45) <= sorptionRange ) angle -= (angle - 45)
-      else if ( angle < 0 && Math.abs(angle + 45) <= sorptionRange ) angle -= (angle + 45)
-      else if ( angle > 0 && Math.abs(angle - 90) <= sorptionRange ) angle -= (angle - 90)
-      else if ( angle < 0 && Math.abs(angle + 90) <= sorptionRange ) angle -= (angle + 90)
-      else if ( angle > 0 && Math.abs(angle - 135) <= sorptionRange ) angle -= (angle - 135)
-      else if ( angle < 0 && Math.abs(angle + 135) <= sorptionRange ) angle -= (angle + 135)
-      else if ( angle > 0 && Math.abs(angle - 180) <= sorptionRange ) angle -= (angle - 180)
-      else if ( angle < 0 && Math.abs(angle + 180) <= sorptionRange ) angle -= (angle + 180)
+      if (e instanceof MouseEvent && e.shiftKey) angle = Math.round(angle / 15) * 15
 
       elementList.value = elementList.value.map(el => element.id === el.id ? { ...el, rotate: angle } : el)
     }

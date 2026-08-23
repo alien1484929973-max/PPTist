@@ -1,7 +1,7 @@
 import type { PlayerDocument } from './types'
 
-export const CURRENT_PLAYER_SCHEMA_VERSION = 2 as const
-export const SUPPORTED_PLAYER_SCHEMA_VERSIONS = [1, 2] as const
+export const CURRENT_PLAYER_SCHEMA_VERSION = 3 as const
+export const SUPPORTED_PLAYER_SCHEMA_VERSIONS = [1, 2, 3] as const
 
 /** Return actionable schema errors without mutating a document. */
 export const validatePlayerDocument = (input: unknown): string[] => {
@@ -19,7 +19,7 @@ export const validatePlayerDocument = (input: unknown): string[] => {
   }
   if (
     document.schemaVersion !== undefined &&
-    !SUPPORTED_PLAYER_SCHEMA_VERSIONS.includes(document.schemaVersion as 1 | 2)
+    !SUPPORTED_PLAYER_SCHEMA_VERSIONS.includes(document.schemaVersion as 1 | 2 | 3)
   ) {
     errors.push(`Unsupported presentation schema version: ${document.schemaVersion}.`)
   }

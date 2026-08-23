@@ -12,6 +12,27 @@ export interface DomAnimationTargets {
   cleanup: () => void
 }
 
+/**
+ * Keeps wipe clips outside SVG strokes and line markers. SVG overflow is
+ * visible in the renderer, so clipping exactly at the element box cuts those
+ * decorations in half while the wipe edge passes over them.
+ */
+export const measureDomAnimationClipPadding = (
+  elements: readonly HTMLElement[],
+) => {
+  let padding = 2
+  for (const element of elements) {
+    let strokeWidth = 0
+    for (const node of element.querySelectorAll<SVGElement>('[stroke-width]')) {
+      const value = Number.parseFloat(node.getAttribute('stroke-width') || '')
+      if (Number.isFinite(value)) strokeWidth = Math.max(strokeWidth, value)
+    }
+    const factor = element.querySelector('marker') ? 4 : 1
+    padding = Math.max(padding, strokeWidth * factor)
+  }
+  return Math.ceil(padding)
+}
+
 const normalizedRange = (range: { start: number; end: number }) => ({
   start: Math.max(0, Math.min(range.start, range.end)),
   end: Math.max(0, range.start, range.end),

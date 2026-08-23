@@ -28,6 +28,12 @@ export const enum ShapePathFormulasKeys {
   INDICATOR = 'indicator',
   DONUT = 'donut',
   DIAGSTRIPE = 'diagStripe',
+  RIGHT_ARROW = 'rightArrow',
+  LEFT_ARROW = 'leftArrow',
+  UP_ARROW = 'upArrow',
+  DOWN_ARROW = 'downArrow',
+  LEFT_RIGHT_ARROW = 'leftRightArrow',
+  UP_DOWN_ARROW = 'upDownArrow',
 }
 
 export const enum ElementTypes {
@@ -40,6 +46,7 @@ export const enum ElementTypes {
   LATEX = 'latex',
   VIDEO = 'video',
   AUDIO = 'audio',
+  WIDGET = 'widget',
 }
 
 /**
@@ -677,8 +684,28 @@ export interface PPTAudioElement extends PPTBaseElement {
   ext?: string
 }
 
+export type WidgetPropScalar = string | number | boolean | null
+export type WidgetPropValue = WidgetPropScalar | WidgetPropScalar[] | Record<string, WidgetPropScalar | WidgetPropScalar[]>
 
-export type PPTElement = PPTTextElement | PPTImageElement | PPTShapeElement | PPTLineElement | PPTChartElement | PPTTableElement | PPTLatexElement | PPTVideoElement | PPTAudioElement
+export interface PPTWidgetElement extends PPTBaseElement {
+  type: 'widget'
+  widgetId: string
+  widgetVersion?: string
+  widgetProps?: Record<string, WidgetPropValue>
+  widgetStateKey?: string
+  widgetMountPolicy?: 'eager' | 'onReveal'
+  widgetInteractive?: boolean
+  widgetScroll: {
+    mode: 'fit' | 'internal' | 'document'
+    overscroll?: 'contain' | 'handoff'
+    intrinsicWidth?: number
+    intrinsicHeight?: number
+  }
+  poster?: string
+}
+
+
+export type PPTElement = PPTTextElement | PPTImageElement | PPTShapeElement | PPTLineElement | PPTChartElement | PPTTableElement | PPTLatexElement | PPTVideoElement | PPTAudioElement | PPTWidgetElement
 
 export type AnimationType = 'in' | 'out' | 'attention' | 'motion'
 export type AnimationTrigger = 'click' | 'meantime' | 'auto'

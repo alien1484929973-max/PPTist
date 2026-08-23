@@ -30,6 +30,92 @@ export interface ShapePathFormula {
 }
 
 export const SHAPE_PATH_FORMULAS: Record<string, ShapePathFormula> = {
+  [ShapePathFormulasKeys.RIGHT_ARROW]: {
+    editable: true,
+    defaultValue: [0.35, 0.45],
+    range: [[0.02, 0.95], [0.02, 0.98]],
+    relative: ['right_center', 'vertical_center_left'],
+    getBaseSize: [width => width, (width, height) => height],
+    formula: (width, height, values) => {
+      const headLength = width * values![0]
+      const shaftHeight = height * values![1]
+      const headBase = width - headLength
+      const shaftTop = (height - shaftHeight) / 2
+      const shaftBottom = shaftTop + shaftHeight
+      return `M 0 ${shaftTop} L ${headBase} ${shaftTop} L ${headBase} 0 L ${width} ${height / 2} L ${headBase} ${height} L ${headBase} ${shaftBottom} L 0 ${shaftBottom} Z`
+    },
+  },
+  [ShapePathFormulasKeys.LEFT_ARROW]: {
+    editable: true,
+    defaultValue: [0.35, 0.45],
+    range: [[0.02, 0.95], [0.02, 0.98]],
+    relative: ['left_center', 'vertical_center_right'],
+    getBaseSize: [width => width, (width, height) => height],
+    formula: (width, height, values) => {
+      const headLength = width * values![0]
+      const shaftHeight = height * values![1]
+      const shaftTop = (height - shaftHeight) / 2
+      const shaftBottom = shaftTop + shaftHeight
+      return `M ${width} ${shaftTop} L ${headLength} ${shaftTop} L ${headLength} 0 L 0 ${height / 2} L ${headLength} ${height} L ${headLength} ${shaftBottom} L ${width} ${shaftBottom} Z`
+    },
+  },
+  [ShapePathFormulasKeys.UP_ARROW]: {
+    editable: true,
+    defaultValue: [0.35, 0.45],
+    range: [[0.02, 0.95], [0.02, 0.98]],
+    relative: ['top_center', 'horizontal_center_bottom'],
+    getBaseSize: [(width, height) => height, width => width],
+    formula: (width, height, values) => {
+      const headHeight = height * values![0]
+      const shaftWidth = width * values![1]
+      const shaftLeft = (width - shaftWidth) / 2
+      const shaftRight = shaftLeft + shaftWidth
+      return `M ${width / 2} 0 L ${width} ${headHeight} L ${shaftRight} ${headHeight} L ${shaftRight} ${height} L ${shaftLeft} ${height} L ${shaftLeft} ${headHeight} L 0 ${headHeight} Z`
+    },
+  },
+  [ShapePathFormulasKeys.DOWN_ARROW]: {
+    editable: true,
+    defaultValue: [0.35, 0.45],
+    range: [[0.02, 0.95], [0.02, 0.98]],
+    relative: ['bottom_center', 'horizontal_center_top'],
+    getBaseSize: [(width, height) => height, width => width],
+    formula: (width, height, values) => {
+      const headHeight = height * values![0]
+      const shaftWidth = width * values![1]
+      const headBase = height - headHeight
+      const shaftLeft = (width - shaftWidth) / 2
+      const shaftRight = shaftLeft + shaftWidth
+      return `M ${shaftLeft} 0 L ${shaftRight} 0 L ${shaftRight} ${headBase} L ${width} ${headBase} L ${width / 2} ${height} L 0 ${headBase} L ${shaftLeft} ${headBase} Z`
+    },
+  },
+  [ShapePathFormulasKeys.LEFT_RIGHT_ARROW]: {
+    editable: true,
+    defaultValue: [0.25, 0.42],
+    range: [[0.02, 0.49], [0.02, 0.98]],
+    relative: ['left_center', 'vertical_center_right'],
+    getBaseSize: [width => width, (width, height) => height],
+    formula: (width, height, values) => {
+      const headLength = width * values![0]
+      const shaftHeight = height * values![1]
+      const shaftTop = (height - shaftHeight) / 2
+      const shaftBottom = shaftTop + shaftHeight
+      return `M 0 ${height / 2} L ${headLength} 0 L ${headLength} ${shaftTop} L ${width - headLength} ${shaftTop} L ${width - headLength} 0 L ${width} ${height / 2} L ${width - headLength} ${height} L ${width - headLength} ${shaftBottom} L ${headLength} ${shaftBottom} L ${headLength} ${height} Z`
+    },
+  },
+  [ShapePathFormulasKeys.UP_DOWN_ARROW]: {
+    editable: true,
+    defaultValue: [0.25, 0.42],
+    range: [[0.02, 0.49], [0.02, 0.98]],
+    relative: ['top_center', 'horizontal_center_bottom'],
+    getBaseSize: [(width, height) => height, width => width],
+    formula: (width, height, values) => {
+      const headHeight = height * values![0]
+      const shaftWidth = width * values![1]
+      const shaftLeft = (width - shaftWidth) / 2
+      const shaftRight = shaftLeft + shaftWidth
+      return `M ${width / 2} 0 L ${width} ${headHeight} L ${shaftRight} ${headHeight} L ${shaftRight} ${height - headHeight} L ${width} ${height - headHeight} L ${width / 2} ${height} L 0 ${height - headHeight} L ${shaftLeft} ${height - headHeight} L ${shaftLeft} ${headHeight} L 0 ${headHeight} Z`
+    },
+  },
   [ShapePathFormulasKeys.ROUND_RECT]: {
     editable: true,
     defaultValue: [0.125],
@@ -643,26 +729,38 @@ export const SHAPE_LIST: ShapeListItem[] = [
       {
         viewBox: [200, 200],
         path: 'M 100 0 L 0 100 L 50 100 L 50 200 L 150 200 L 150 100 L 200 100 L 100 0 Z',
+        pathFormula: ShapePathFormulasKeys.UP_ARROW,
+        pptxShapeType: 'upArrow',
       },
       {
         viewBox: [200, 200],
         path: 'M 100 200 L 200 100 L 150 100 L 150 0 L 50 0 L 50 100 L 0 100 L 100 200 Z',
+        pathFormula: ShapePathFormulasKeys.DOWN_ARROW,
+        pptxShapeType: 'downArrow',
       },
       {
         viewBox: [200, 200],
         path: 'M 0 100 L 100 0 L 100 50 L 200 50 L 200 150 L 100 150 L 100 200 L 0 100 Z',
+        pathFormula: ShapePathFormulasKeys.LEFT_ARROW,
+        pptxShapeType: 'leftArrow',
       },
       {
         viewBox: [200, 200],
         path: 'M 200 100 L 100 0 L 100 50 L 0 50 L 0 150 L 100 150 L 100 200 L 200 100 Z',
+        pathFormula: ShapePathFormulasKeys.RIGHT_ARROW,
+        pptxShapeType: 'rightArrow',
       },
       {
         viewBox: [200, 200],
         path: 'M 100 0 L 0 60 L 60 60 L 60 140 L 0 140 L 100 200 L 200 140 L 140 140 L 140 60 L 200 60 L 100 0 Z',
+        pathFormula: ShapePathFormulasKeys.UP_DOWN_ARROW,
+        pptxShapeType: 'upDownArrow',
       },
       {
         viewBox: [200, 200],
         path: 'M 0 100 L 60 0 L 60 60 L 140 60 L 140 0 L 200 100 L 140 200 L 140 140 L 60 140 L 60 200 L 0 100 Z',
+        pathFormula: ShapePathFormulasKeys.LEFT_RIGHT_ARROW,
+        pptxShapeType: 'leftRightArrow',
       },
       {
         viewBox: [200, 200],

@@ -4,6 +4,7 @@ import {
   createPresentationMorphCandidates,
   createAnimationPlan,
   matchMorphElements,
+  measureDomAnimationClipPadding,
   presentationMorphGeometryDiffers,
   presentationMorphNeedsAnimation,
   presentationMorphNeedsCrossfade,
@@ -34,9 +35,10 @@ import type {
   PlayerState,
   PresentationPlayer,
 } from './types'
+import { resolvePlayerWheelIntent } from './interaction'
 
 const PLAYER_STYLE_ID = 'pptist-presentation-player-styles'
-const INTERACTIVE_SELECTOR = 'a,button,input,select,textarea,[contenteditable="true"],video,audio,.pptist-player-link,[data-pptist-no-advance]'
+const INTERACTIVE_SELECTOR = 'a,button,input,select,textarea,[contenteditable="true"],video,audio,.pptist-player-link,[data-pptist-no-advance],[data-pptist-interactive]'
 const PLAYER_CSS = `
 .pptist-player-host{position:relative;overflow:hidden;isolation:isolate;background:#111;outline:none}
 .pptist-player-viewport{position:absolute;inset:0;overflow:hidden;display:flex;align-items:center;justify-content:center}
@@ -45,6 +47,14 @@ const PLAYER_CSS = `
 .pptist-player-background{position:absolute;inset:0;z-index:-1;background-position:center}
 .pptist-player-element{position:absolute;box-sizing:border-box;transform-origin:center center}
 .pptist-player-element>*{box-sizing:border-box}
+.pptist-player-widget,.pptist-player-widget-viewport{width:100%;height:100%}
+.pptist-player-widget{position:relative;overflow:hidden}
+.pptist-player-widget-viewport{position:relative;overflow:hidden;scrollbar-width:none;-ms-overflow-style:none;touch-action:pan-x pan-y}
+.pptist-player-widget-viewport::-webkit-scrollbar{display:none;width:0;height:0}
+.pptist-player-widget-internal,.pptist-player-widget-document{overflow:auto}
+.pptist-player-widget-viewport[data-pptist-overscroll="contain"]{overscroll-behavior:contain}
+.pptist-player-widget-viewport[data-pptist-overscroll="handoff"]{overscroll-behavior:auto}
+.pptist-player-widget-content{position:relative;box-sizing:border-box}
 .pptist-player-group{position:absolute;transform-origin:center center;pointer-events:none}
 .pptist-player-group-content{position:absolute;pointer-events:none}
 .pptist-player-group .pptist-player-element{pointer-events:auto}
@@ -187,6 +197,7 @@ export class DomPresentationPlayer implements PresentationPlayer {
   private readonly elementNodes = new Map<string, HTMLElement>()
   private readonly groupNodes = new Map<string, HTMLElement>()
   private readonly cleanupHandlers: Array<() => void> = []
+  private readonly layerCleanupHandlers = new Map<HTMLElement, Array<() => void>>()
   private readonly preparedTargets = new Map<string, DomAnimationTargets>()
   private slideTransitionAnimations: Animation[] = []
   private slideTransitionCleanupHandlers: Array<() => void> = []
@@ -328,6 +339,7 @@ export class DomPresentationPlayer implements PresentationPlayer {
     this.renderGeneration += 1
     this.cancelSlideTransition()
     this.clearPlaybackState()
+    if (this.activeLayer) this.disposeLayer(this.activeLayer)
     this.resizeObserver?.disconnect()
     this.viewport.removeEventListener('pointerdown', this.handlePointerDown)
     this.viewport.removeEventListener('wheel', this.handleWheel)
@@ -398,12 +410,11 @@ export class DomPresentationPlayer implements PresentationPlayer {
     this.cancelSlideTransition()
     const toIndex = this.controller.slideIndex
     const shouldTransition = fromIndex !== undefined && fromIndex !== toIndex && !!this.activeLayer
-    const previousLayer = shouldTransition
-      ? this.activeLayer?.cloneNode(true) as HTMLElement | undefined
-      : undefined
+    const previousLayer = shouldTransition ? this.activeLayer : undefined
+    if (previousLayer) previousLayer.style.pointerEvents = 'none'
     this.clearPlaybackState()
-    this.canvas.replaceChildren()
-    if (previousLayer) this.canvas.appendChild(previousLayer)
+    if (!previousLayer && this.activeLayer) this.disposeLayer(this.activeLayer)
+    if (!previousLayer) this.canvas.replaceChildren()
     this.elementNodes.clear()
     this.groupNodes.clear()
     const slide = this.controller.currentSlide
@@ -426,6 +437,8 @@ export class DomPresentationPlayer implements PresentationPlayer {
     layer.appendChild(background)
     this.canvas.appendChild(layer)
     this.activeLayer = layer
+    const layerCleanups: Array<() => void> = []
+    this.layerCleanupHandlers.set(layer, layerCleanups)
 
     const groups = new Map<string, PlayerElement[]>()
     for (const element of slide.elements) {
@@ -446,7 +459,7 @@ export class DomPresentationPlayer implements PresentationPlayer {
           this.presentation,
           this.options,
           slideId => this.goToSlideId(slideId),
-          cleanup => this.cleanupHandlers.push(cleanup),
+          cleanup => layerCleanups.push(cleanup),
         )
         this.elementNodes.set(element.id, result.root)
         layer.appendChild(result.root)
@@ -480,7 +493,7 @@ export class DomPresentationPlayer implements PresentationPlayer {
           this.presentation,
           this.options,
           slideId => this.goToSlideId(slideId),
-          cleanup => this.cleanupHandlers.push(cleanup),
+          cleanup => layerCleanups.push(cleanup),
         )
         this.elementNodes.set(member.id, result.root)
         content.appendChild(result.root)
@@ -534,9 +547,10 @@ export class DomPresentationPlayer implements PresentationPlayer {
           if (renderGeneration !== this.renderGeneration) return
           await runEntryAnimations()
         }
+        if (renderGeneration === this.renderGeneration) this.disposeLayer(previousLayer)
       }
       else {
-        previousLayer.remove()
+        this.disposeLayer(previousLayer)
         await runEntryAnimations()
       }
     }
@@ -573,8 +587,16 @@ export class DomPresentationPlayer implements PresentationPlayer {
     for (const cleanup of this.slideTransitionCleanupHandlers.reverse()) cleanup()
     this.slideTransitionCleanupHandlers = []
     for (const layer of Array.from(this.canvas?.children || [])) {
-      if (layer !== this.activeLayer) layer.remove()
+      if (layer !== this.activeLayer && layer instanceof HTMLElement) this.disposeLayer(layer)
     }
+  }
+
+  private disposeLayer(layer: HTMLElement) {
+    const cleanups = this.layerCleanupHandlers.get(layer) || []
+    for (const cleanup of cleanups.reverse()) cleanup()
+    this.layerCleanupHandlers.delete(layer)
+    layer.remove()
+    if (this.activeLayer === layer) this.activeLayer = undefined
   }
 
   private startSlideAnimation(
@@ -864,6 +886,7 @@ export class DomPresentationPlayer implements PresentationPlayer {
     const plan = createAnimationPlan(canonical, { ...animation.timing, duration: 0, delay: 0 }, {
       viewportWidth: this.presentation.width,
       viewportHeight: this.presentation.height,
+      clipPadding: measureDomAnimationClipPadding(targets.elements),
     })
     for (const target of targets.elements) setDomAnimationFinalState(target, plan)
     this.cleanupHandlers.push(targets.cleanup)
@@ -882,6 +905,7 @@ export class DomPresentationPlayer implements PresentationPlayer {
     const plan = createAnimationPlan(canonical, animation.timing, {
       viewportWidth: this.presentation.width,
       viewportHeight: this.presentation.height,
+      clipPadding: measureDomAnimationClipPadding(targets.elements),
     })
     const handles = targets.elements
       .map(element => runDomAnimation(element, plan))
@@ -957,14 +981,17 @@ export class DomPresentationPlayer implements PresentationPlayer {
 
   private readonly handleWheel = (event: WheelEvent) => {
     if (!this.options.wheel || this.destroyed || event.ctrlKey) return
-    const target = event.target as Element | null
-    if (target?.closest(INTERACTIVE_SELECTOR)) return
-
     const config = typeof this.options.wheel === 'object' ? this.options.wheel : {}
     const threshold = Math.max(1, config.threshold ?? 36)
     const idleResetMs = Math.max(50, config.idleResetMs ?? 180)
     const dominantDelta = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX
     if (!dominantDelta) return
+    const intent = resolvePlayerWheelIntent(event.target as Element | null, this.viewport, event.deltaX, event.deltaY)
+    if (intent !== 'player') {
+      this.resetWheelGesture()
+      if (intent === 'contain') event.preventDefault()
+      return
+    }
     if (config.preventDefault !== false) event.preventDefault()
 
     const pageSize = Math.max(1, this.host.clientHeight)
@@ -989,6 +1016,16 @@ export class DomPresentationPlayer implements PresentationPlayer {
     this.wheelGestureConsumed = true
     this.wheelDelta = 0
     this.finishOrAdvanceWheelStep(direction)
+  }
+
+  private resetWheelGesture() {
+    this.wheelDelta = 0
+    this.wheelDirection = 0
+    this.wheelGestureConsumed = false
+    if (this.wheelResetTimer !== undefined) {
+      this.ownerDocument.defaultView?.clearTimeout(this.wheelResetTimer)
+      this.wheelResetTimer = undefined
+    }
   }
 }
 

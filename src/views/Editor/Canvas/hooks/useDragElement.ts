@@ -22,7 +22,7 @@ export default (
   const mainStore = useMainStore()
   const slidesStore = useSlidesStore()
   const { activeElementIdList, activeGroupElementId } = storeToRefs(mainStore)
-  const { ctrlKeyState, shiftKeyState } = storeToRefs(useKeyboardStore())
+  const { ctrlKeyState } = storeToRefs(useKeyboardStore())
   const { viewportRatio, viewportSize } = storeToRefs(slidesStore)
 
   const { addHistorySnapshot } = useHistorySnapshot()
@@ -57,6 +57,7 @@ export default (
 
     let isMisoperation: boolean | null = null
     let duplicateTriggered = false // 标记是否已触发 Ctrl+拖拽复制
+    let lockedAxis: 'horizontal' | 'vertical' | null = null
 
     const isActiveGroupElement = element.id === activeGroupElementId.value
 
@@ -184,15 +185,19 @@ export default (
       if (!isMouseDown || isMisoperation) return
 
       // 拖拽过程中按住Ctrl键且尚未复制过，则触发复制
-      if (!duplicateTriggered && ctrlKeyState.value) duplicateElement()
+      const mouseEvent = e instanceof MouseEvent ? e : undefined
+      const ctrlActive = mouseEvent ? mouseEvent.ctrlKey || mouseEvent.metaKey : ctrlKeyState.value
+      if (!duplicateTriggered && ctrlActive) duplicateElement()
       
       let moveX = (currentPageX - startPageX) / canvasScale.value
       let moveY = (currentPageY - startPageY) / canvasScale.value
 
-      if (shiftKeyState.value) {
-        if (Math.abs(moveX) > Math.abs(moveY)) moveY = 0
-        if (Math.abs(moveX) < Math.abs(moveY)) moveX = 0
+      if (mouseEvent?.shiftKey) {
+        if (!lockedAxis) lockedAxis = Math.abs(moveX) >= Math.abs(moveY) ? 'horizontal' : 'vertical'
+        if (lockedAxis === 'horizontal') moveY = 0
+        else moveX = 0
       }
+      else lockedAxis = null
 
       // 基础目标位置
       let targetLeft = elOriginLeft + moveX
@@ -276,11 +281,12 @@ export default (
       // 将收集到的对齐吸附线与计算的目标元素位置范围做对比，二者的差小于设定的值时执行自动对齐校正
       // 水平和垂直两个方向需要分开计算
       const _alignmentLines: AlignmentLineProps[] = []
-      const horizontalMatch = findClosestAlignment(horizontalLines, [
+      const snappingEnabled = !mouseEvent?.altKey
+      const horizontalMatch = snappingEnabled ? findClosestAlignment(horizontalLines, [
         { value: targetMinY, range: [targetMinX, targetMaxX], priority: 1 },
         { value: targetMaxY, range: [targetMinX, targetMaxX], priority: 1 },
         { value: targetCenterY, range: [targetMinX, targetMaxX], priority: 0 },
-      ], alignmentThreshold)
+      ], alignmentThreshold) : null
 
       if (horizontalMatch) {
         targetTop = targetTop - horizontalMatch.offset
@@ -288,11 +294,11 @@ export default (
         targetMaxY = targetMaxY - horizontalMatch.offset
       }
 
-      const verticalMatch = findClosestAlignment(verticalLines, [
+      const verticalMatch = snappingEnabled ? findClosestAlignment(verticalLines, [
         { value: targetMinX, range: [targetMinY, targetMaxY], priority: 1 },
         { value: targetMaxX, range: [targetMinY, targetMaxY], priority: 1 },
         { value: targetCenterX, range: [targetMinY, targetMaxY], priority: 0 },
-      ], alignmentThreshold)
+      ], alignmentThreshold) : null
 
       if (verticalMatch) {
         targetLeft = targetLeft - verticalMatch.offset

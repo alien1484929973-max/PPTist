@@ -15,6 +15,7 @@ import {
   createPresentationPlayer,
   type PlayerDocument,
   type PlayerState,
+  type PresentationWidgetRegistry,
   type PresentationPlayer,
 } from 'pptist-presentation-player'
 import { serializePresentation } from '@/utils/presentation'
@@ -30,6 +31,7 @@ const props = withDefaults(defineProps<{
   keyboardScope?: 'host' | 'document'
   wheel?: boolean
   clickToAdvance?: boolean
+  widgets?: PresentationWidgetRegistry
 }>(), {
   keyboard: true,
   keyboardScope: 'document',
@@ -81,6 +83,7 @@ onMounted(() => {
       wheel: props.wheel,
       clickToAdvance: props.clickToAdvance,
       showUnsupported: false,
+      widgets: props.widgets,
       onStateChange: state => emit('stateChange', state),
     })
     emit('ready', player)

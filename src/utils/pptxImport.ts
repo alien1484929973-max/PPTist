@@ -6,6 +6,42 @@ export type SourceAwareElement = Element & {
   pptxSource?: PptxSourceElementMetadata
 }
 
+const HORIZONTAL_ARROW_TYPES = new Set([
+  'rightArrow',
+  'leftArrow',
+  'leftRightArrow',
+])
+const VERTICAL_ARROW_TYPES = new Set([
+  'upArrow',
+  'downArrow',
+  'upDownArrow',
+])
+const DOUBLE_ARROW_TYPES = new Set(['leftRightArrow', 'upDownArrow'])
+
+/**
+ * pptxtojson exposes OOXML adjustment values divided by 50000. PowerPoint's
+ * arrow adj1 controls shaft thickness, while adj2 is based on the short axis
+ * and therefore must be converted using the imported shape aspect ratio.
+ */
+export const pptxArrowKeypointValues = (
+  shapeType: string,
+  keypoints: Record<string, number | undefined> | undefined,
+  width: number,
+  height: number,
+): number[] | undefined => {
+  const horizontal = HORIZONTAL_ARROW_TYPES.has(shapeType)
+  if (!horizontal && !VERTICAL_ARROW_TYPES.has(shapeType)) return undefined
+
+  const adj1 = Number.isFinite(keypoints?.adj1) ? keypoints!.adj1! : 1
+  const defaultAdj2 = DOUBLE_ARROW_TYPES.has(shapeType) ? 0.5 : 1
+  const adj2 = Number.isFinite(keypoints?.adj2) ? keypoints!.adj2! : defaultAdj2
+  const axisSize = horizontal ? width : height
+  const crossSize = horizontal ? height : width
+  const headLength = axisSize > 0 ? adj2 * crossSize / (2 * axisSize) : 0.5
+  const shaftThickness = adj1 / 2
+  return [headLength, shaftThickness]
+}
+
 const sourceKindMatchesElement = (source: PptxSourceElementMetadata, element: Element) => {
   if (source.kind === 'sp' || source.kind === 'cxnSp') return element.type === 'shape' || element.type === 'text'
   if (source.kind === 'pic') return ['image', 'video', 'audio', 'math'].includes(element.type)

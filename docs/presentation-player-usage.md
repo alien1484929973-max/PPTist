@@ -2,6 +2,38 @@
 
 适用包：`pptist-presentation-player@0.1.1`。该包是框架无关的 ESM 浏览器播放器，可在 Vue、React、Svelte 或原生页面中播放 PPTist JSON 文稿，不需要 iframe，也不依赖 Vue runtime。
 
+## 同源网页组件
+
+同一网站内的业务组件使用 `type: 'widget'`，不需要把整页塞进 iframe。编辑器保存稳定的 `widgetId`、版本要求、props、state key、元素矩形、挂载时机和滚动策略；消费项目通过 `PlayerOptions.widgets` 注册真正的框架组件：
+
+```ts
+const widgets = {
+  'lesson-outline': definePresentationWidget({
+    id: 'lesson-outline',
+    version: '1.2.0',
+    render({ content, props, stateKey, onCleanup }) {
+      const app = createApp(LessonOutline, { ...props, stateKey })
+      app.mount(content)
+      onCleanup(() => app.unmount())
+    },
+  }),
+}
+
+const requirements = inspectPresentationRequirements(presentation, widgets)
+const player = createPresentationPlayer(host, presentation, { widgets })
+```
+
+`eager` 会在入场动画前挂载，适合需要先完成布局再播放的组件；`onReveal` 到第一次入场时才挂载，适合重型图表或 WebGL。编辑器和消费项目应依赖同一个 widget registry 包。
+
+- `fit`：按 intrinsic size 居中等比缩放到元素矩形，不滚动。
+- `internal`：组件占满固定视口，超出内容在内部滚动。
+- `document`：内容形成长页面，仍被幻灯片元素矩形裁切；可用 `intrinsicHeight` 声明最小内容高度。
+- `contain`：到滚动边界后仍拦截手势。
+- `handoff`：到边界后将后续规范化手势交给播放器翻页。
+
+播放器会沿事件目标向上识别组件内部原生的 `overflow: auto/scroll` 容器；只要该容器仍可滚动，
+滚轮就不会进入幻灯片翻页手势。
+
 ## 1. 获取和校验
 
 Node.js 要求 `>=18`。统一构建会生成带版本号的离线包：
@@ -89,7 +121,7 @@ if (compatibility.blocking.length || !resources.portable) {
 const player = createPresentationPlayer(container, document)
 ```
 
-播放器接受无 `schemaVersion` 的旧文稿、版本 1 和当前版本 2；未知未来版本会报错。未知元素属于阻断问题，未知导入转场会使用稳定的淡入回退。
+播放器接受无 `schemaVersion` 的旧文稿、版本 1、版本 2 和当前版本 3；未知未来版本会报错。未知元素属于阻断问题，未知导入转场会使用稳定的淡入回退。
 
 ## 4. 媒体资源
 

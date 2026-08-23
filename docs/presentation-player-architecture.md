@@ -33,8 +33,14 @@ Vite 不把它别名到播放器源码；`predev` 和正式 `build` 会先构建
 ## JSON 契约
 
 正式文稿包含 `schemaVersion`、画布尺寸、主题、幻灯片、最后播放页和元素/动画/转场数据。
-当前版本为 2。播放器接受无版本旧文稿、版本 1 和版本 2；未知未来版本明确报错，避免旧
+当前版本为 3。播放器接受无版本旧文稿、版本 1、版本 2 和版本 3；未知未来版本明确报错，避免旧
 播放器静默错误播放。
+
+## 网页组件边界
+
+`packages/presentation-player` 负责 widget 的位置、动画外壳、挂载时机、隐藏滚动条和滚轮仲裁，不能依赖 Vue。宿主注册表负责把 `widgetId` 解析为真实 Vue、React、Canvas、WebGL 或原生 DOM 实现，并负责业务数据和销毁。
+
+生命周期为 `prepare -> ready -> entering -> active -> exiting -> suspended/destroyed`。页面转场保留真实旧页面 DOM 到动画结束，不再使用 `cloneNode()`，因此 Canvas 像素、媒体状态、事件监听和框架实例在转场期间不会失活。
 
 外部接入可直接传对象或 JSON 文本：
 

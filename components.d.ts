@@ -32,6 +32,7 @@ declare module 'vue' {
     'IIconParkOutline:alignTextTopOne': typeof import('~icons/icon-park-outline/align-text-top-one')['default']
     'IIconParkOutline:alignTop': typeof import('~icons/icon-park-outline/align-top')['default']
     'IIconParkOutline:alignVertically': typeof import('~icons/icon-park-outline/align-vertically')['default']
+    'IIconParkOutline:applicationOne': typeof import('~icons/icon-park-outline/application-one')['default']
     'IIconParkOutline:arrowCircleLeft': typeof import('~icons/icon-park-outline/arrow-circle-left')['default']
     'IIconParkOutline:arrowRight': typeof import('~icons/icon-park-outline/arrow-right')['default']
     'IIconParkOutline:back': typeof import('~icons/icon-park-outline/back')['default']

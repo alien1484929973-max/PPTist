@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { Window } from 'happy-dom'
+import type { PlayerDocument } from '../src/types'
 
 const installDom = () => {
   const window = new Window({ url: 'https://example.test/' })
@@ -326,6 +327,227 @@ test('custom renderers can embed host webpage elements and release their resourc
   assert.equal(host.querySelector('[data-test-widget="ready"]')?.textContent, '测试项目按钮')
   player.destroy()
   assert.equal(cleanedUp, true)
+  await window.happyDOM.abort()
+})
+
+test('registered widgets expose requirements and keep long-page wheel input inside the widget', async () => {
+  const { window, host } = installDom()
+  const {
+    createPresentationPlayer,
+    definePresentationWidget,
+    inspectPresentationRequirements,
+  } = await import('../src/index')
+  const document: PlayerDocument = {
+    schemaVersion: 3,
+    width: 1000,
+    height: 562.5,
+    slides: [
+      {
+        id: 'one',
+        elements: [{
+          id: 'long-widget',
+          type: 'widget',
+          widgetId: 'lesson-outline',
+          widgetVersion: '^1',
+          widgetProps: { title: '课程目录' },
+          widgetScroll: { mode: 'document', overscroll: 'handoff', intrinsicHeight: 720 },
+          left: 100,
+          top: 80,
+          width: 320,
+          height: 180,
+        }],
+      },
+      { id: 'two', elements: [] },
+    ],
+  }
+  const widgets = {
+    'lesson-outline': definePresentationWidget({
+      id: 'lesson-outline',
+      version: '1.4.0',
+      render({ container, props }) {
+        const content = container.ownerDocument.createElement('button')
+        content.textContent = String(props.title)
+        return content
+      },
+    }),
+  }
+  const report = inspectPresentationRequirements(document, widgets)
+  assert.equal(report.compatible, true)
+  assert.deepEqual(report.requirements[0].occurrences[0].bounds, {
+    left: 100,
+    top: 80,
+    width: 320,
+    height: 180,
+  })
+
+  const player = createPresentationPlayer(host, document, {
+    widgets,
+    wheel: { threshold: 20 },
+  })
+  const viewport = host.querySelector('[data-pptist-scroll="true"]') as HTMLElement
+  const content = viewport.querySelector('.pptist-player-widget-content') as HTMLElement
+  assert.equal(viewport.tabIndex, 0)
+  assert.equal(content.style.minHeight, '720px')
+  Object.defineProperties(viewport, {
+    clientHeight: { configurable: true, value: 180 },
+    scrollHeight: { configurable: true, value: 500 },
+  })
+  viewport.scrollTop = 40
+  viewport.dispatchEvent(new window.WheelEvent('wheel', { deltaY: 50, bubbles: true, cancelable: true }) as unknown as Event)
+  await new Promise(resolve => setTimeout(resolve, 0))
+  assert.equal(player.state.slideIndex, 0)
+
+  viewport.scrollTop = 320
+  viewport.dispatchEvent(new window.WheelEvent('wheel', { deltaY: 50, bubbles: true, cancelable: true }) as unknown as Event)
+  await new Promise(resolve => setTimeout(resolve, 0))
+  assert.equal(player.state.slideIndex, 1)
+  player.destroy()
+  await window.happyDOM.abort()
+})
+
+test('fit widgets center their intrinsic surface without exposing scrollbars', async () => {
+  const { window, host } = installDom()
+  const { createPresentationPlayer, definePresentationWidget } = await import('../src/index')
+  const player = createPresentationPlayer(host, {
+    schemaVersion: 3,
+    width: 1000,
+    height: 562.5,
+    slides: [{
+      id: 'one',
+      elements: [{
+        id: 'fit-widget',
+        type: 'widget',
+        widgetId: 'dashboard',
+        widgetScroll: { mode: 'fit', intrinsicWidth: 800, intrinsicHeight: 600 },
+        left: 0,
+        top: 0,
+        width: 400,
+        height: 200,
+      }],
+    }],
+  }, {
+    widgets: {
+      dashboard: definePresentationWidget({ id: 'dashboard', render() {} }),
+    },
+  })
+  const viewport = host.querySelector('.pptist-player-widget-fit') as HTMLElement
+  const content = viewport.querySelector('.pptist-player-widget-content') as HTMLElement
+  assert.equal(viewport.dataset.pptistScroll, 'false')
+  assert.equal(content.style.left, '50%')
+  assert.equal(content.style.top, '50%')
+  assert.equal(content.style.transform, 'translate(-50%, -50%) scale(0.3333333333333333)')
+  player.destroy()
+  await window.happyDOM.abort()
+})
+
+test('internal widgets preserve native nested scrolling before boundary handoff', async () => {
+  const { window, host } = installDom()
+  const { createPresentationPlayer, definePresentationWidget } = await import('../src/index')
+  const player = createPresentationPlayer(host, {
+    schemaVersion: 3,
+    width: 1000,
+    height: 562.5,
+    slides: [{
+      id: 'one',
+      elements: [{
+        id: 'internal-widget',
+        type: 'widget',
+        widgetId: 'nested-scroll',
+        widgetScroll: { mode: 'internal', overscroll: 'handoff' },
+        left: 0,
+        top: 0,
+        width: 300,
+        height: 180,
+      }],
+    }, { id: 'two', elements: [] }],
+  }, {
+    wheel: { threshold: 20 },
+    widgets: {
+      'nested-scroll': definePresentationWidget({
+        id: 'nested-scroll',
+        render({ container }) {
+          const nested = container.ownerDocument.createElement('div')
+          nested.dataset.testNestedScroll = 'true'
+          nested.style.overflowY = 'auto'
+          nested.style.height = '100px'
+          return nested
+        },
+      }),
+    },
+  })
+  const nested = host.querySelector('[data-test-nested-scroll="true"]') as HTMLElement
+  Object.defineProperties(nested, {
+    clientHeight: { configurable: true, value: 100 },
+    scrollHeight: { configurable: true, value: 300 },
+  })
+  nested.scrollTop = 50
+  nested.dispatchEvent(new window.WheelEvent('wheel', { deltaY: 60, bubbles: true, cancelable: true }) as unknown as Event)
+  await new Promise(resolve => setTimeout(resolve, 0))
+  assert.equal(player.state.slideIndex, 0)
+
+  nested.scrollTop = 200
+  nested.dispatchEvent(new window.WheelEvent('wheel', { deltaY: 60, bubbles: true, cancelable: true }) as unknown as Event)
+  await new Promise(resolve => setTimeout(resolve, 0))
+  assert.equal(player.state.slideIndex, 1)
+  player.destroy()
+  await window.happyDOM.abort()
+})
+
+test('widget inspection reports missing implementations and onReveal waits for entrance playback', async () => {
+  const { window, host } = installDom()
+  const {
+    createPresentationPlayer,
+    definePresentationWidget,
+    inspectPresentationRequirements,
+  } = await import('../src/index')
+  const document: PlayerDocument = {
+    schemaVersion: 3,
+    width: 1000,
+    height: 562.5,
+    slides: [{
+      id: 'one',
+      elements: [{
+        id: 'deferred-widget',
+        type: 'widget',
+        widgetId: 'deferred',
+        widgetMountPolicy: 'onReveal',
+        left: 0,
+        top: 0,
+        width: 300,
+        height: 160,
+      }],
+      animationTimeline: {
+        version: 1,
+        animations: [{
+          id: 'show-widget',
+          target: { elementId: 'deferred-widget' },
+          timing: { duration: 0, delay: 0, trigger: 'click' },
+          effect: { class: 'entrance', canonical: { kind: 'appear', phase: 'entrance' } },
+        }],
+      },
+    }],
+  }
+  const missing = inspectPresentationRequirements(document)
+  assert.equal(missing.compatible, false)
+  assert.equal(missing.issues[0].code, 'missing-widget')
+
+  let mounts = 0
+  const player = createPresentationPlayer(host, document, {
+    widgets: {
+      deferred: definePresentationWidget({
+        id: 'deferred',
+        render() {
+          mounts += 1
+        },
+      }),
+    },
+  })
+  await new Promise(resolve => setTimeout(resolve, 0))
+  assert.equal(mounts, 0)
+  await player.next()
+  await new Promise(resolve => setTimeout(resolve, 0))
+  assert.equal(mounts, 1)
+  player.destroy()
   await window.happyDOM.abort()
 })
 
