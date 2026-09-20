@@ -16,6 +16,7 @@
       :handlerVisible="!elementInfo.lock && (isActiveGroupElement || !isMultiSelect)"
       :rotateElement="rotateElement"
       :scaleElement="scaleElement"
+      :moveElement="moveElement"
       :dragLineElement="dragLineElement"
       :moveShapeKeypoint="moveShapeKeypoint"
     ></component>
@@ -52,6 +53,7 @@ const props = defineProps<{
   isMultiSelect: boolean
   rotateElement: (e: MouseEvent, element: Exclude<PPTElement, PPTChartElement | PPTLineElement | PPTVideoElement | PPTAudioElement>) => void
   scaleElement: (e: MouseEvent, element: Exclude<PPTElement, PPTLineElement>, command: OperateResizeHandlers) => void
+  moveElement: (e: MouseEvent | TouchEvent, element: PPTElement) => void
   dragLineElement: (e: MouseEvent, element: PPTLineElement, command: OperateLineHandlers) => void
   moveShapeKeypoint: (e: MouseEvent, element: PPTShapeElement, index: number) => void
 }>()

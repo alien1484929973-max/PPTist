@@ -50,6 +50,7 @@
           :isMultiSelect="activeElementIdList.length > 1"
           :rotateElement="rotateElement"
           :scaleElement="scaleElement"
+          :moveElement="dragElement"
           :dragLineElement="dragLineElement"
           :moveShapeKeypoint="moveShapeKeypoint"
           v-show="!hiddenElementIdList.includes(element.id)"
