@@ -1,7 +1,7 @@
 <template>
   <div 
     class="editable-element-text" 
-    :class="{ 'lock': elementInfo.lock }"
+    :class="{ 'lock': elementInfo.lock, 'move-ready': moveReady }"
     :style="{
       top: elementInfo.top + 'px',
       left: elementInfo.left + 'px',
@@ -50,12 +50,8 @@
           :editable="!elementInfo.lock"
           :value="elementInfo.content"
           @update="({ value, ignore }) => updateContent(value, ignore)"
-          @mousedown="$event => handleSelectElement($event, false)"
+          @mousedown="handleTextMousedown"
         />
-
-        <!-- 当字号过大且行高较小时，会出现文字高度溢出的情况，导致拖拽区域无法被选中，因此添加了以下节点避免该情况 -->
-        <div class="drag-handler top"></div>
-        <div class="drag-handler bottom"></div>
       </div>
     </div>
   </div>
@@ -108,6 +104,45 @@ const handleSelectElement = (e: MouseEvent | TouchEvent, canMove = true) => {
 
   props.selectElement(e, props.elementInfo, canMove)
 }
+
+const moveReady = ref(false)
+let holdTimer: ReturnType<typeof setTimeout> | undefined
+const cancelHold = () => {
+  clearTimeout(holdTimer)
+  moveReady.value = false
+  document.removeEventListener('mousemove', cancelOnMove)
+  document.removeEventListener('mouseup', cancelHold)
+  window.removeEventListener('blur', cancelHold)
+}
+let holdX = 0
+let holdY = 0
+const cancelOnMove = (e: MouseEvent) => {
+  if (Math.hypot(e.clientX - holdX, e.clientY - holdY) > 5) cancelHold()
+}
+const handleTextMousedown = (e: MouseEvent) => {
+  cancelHold()
+  if (props.elementInfo.lock) return
+  if (e.ctrlKey || e.metaKey || e.shiftKey) {
+    handleSelectElement(e)
+    return
+  }
+  handleSelectElement(e, false)
+  if (e.button !== 0 || e.detail > 1) return
+  holdX = e.clientX
+  holdY = e.clientY
+  document.addEventListener('mousemove', cancelOnMove)
+  document.addEventListener('mouseup', cancelHold)
+  window.addEventListener('blur', cancelHold)
+  // 先保留原生光标/拖选；只有静止长按才将手势交给画布拖动。
+  holdTimer = setTimeout(() => {
+    document.removeEventListener('mousemove', cancelOnMove)
+    window.getSelection()?.removeAllRanges()
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
+    moveReady.value = true
+    props.selectElement(e, props.elementInfo, true)
+  }, 450)
+}
+onUnmounted(cancelHold)
 
 // 监听文本元素的尺寸变化，当高度变化时，更新高度到vuex
 // 如果高度变化时正处在缩放操作中，则等待缩放操作结束后再更新
@@ -236,17 +271,10 @@ watch(isHandleElement, () => {
     cursor: text;
   }
 }
-.drag-handler {
-  height: 10px;
-  position: absolute;
-  left: 0;
-  right: 0;
-
-  &.top {
-    top: 0;
-  }
-  &.bottom {
-    bottom: 0;
+.move-ready {
+  ::v-deep(.prosemirror-editor) {
+    cursor: move;
+    user-select: none;
   }
 }
 </style>

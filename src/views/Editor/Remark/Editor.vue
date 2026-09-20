@@ -30,8 +30,7 @@
 </template>
 
 <script lang="ts" setup>
-import { onMounted, onUnmounted, ref, useTemplateRef } from 'vue'
-import { debounce } from 'lodash'
+import { onMounted, onUnmounted, ref, useTemplateRef, watch } from 'vue'
 import { useMainStore } from '@/store'
 import type { EditorView } from 'prosemirror-view'
 import { initProsemirrorEditor, createDocument } from '@/utils/prosemirror'
@@ -65,9 +64,9 @@ const hideMenuInstance = () => {
   if (menuInstance.value) menuInstance.value.hide()
 }
 
-const handleInput = debounce(function() {
+const handleInput = () => {
   emit('update', editorView.dom.innerHTML)
-}, 300, { trailing: true })
+}
 
 const handleFocus = () => {
   mainStore.setDisableHotkeysState(true)
@@ -79,11 +78,16 @@ const handleBlur = () => {
 
 const updateTextContent = () => {
   if (!editorView) return
+  const content = createDocument(props.value)
   const { doc, tr } = editorView.state
-  editorView.dispatch(tr.replaceRangeWith(0, doc.content.size, createDocument(props.value)))
+  if (doc.eq(content)) return
+  editorView.updateState(editorView.state.apply(
+    tr.replaceWith(0, doc.content.size, content.content).setMeta('addToHistory', false),
+  ))
 }
 
-defineExpose({ updateTextContent })
+watch(() => props.value, updateTextContent)
+defineExpose({ focus: () => editorView?.focus() })
 
 const handleMouseup = () => {
   const selection = window.getSelection()
@@ -165,16 +169,18 @@ const execCommand = (command: string, value?: string) => {
 
 onMounted(() => {
   editorView = initProsemirrorEditor((editorViewRef.value as Element), props.value, {
+    dispatchTransaction(transaction) {
+      editorView.updateState(editorView.state.apply(transaction))
+      if (transaction.docChanged) handleInput()
+    },
     handleDOMEvents: {
       focus: handleFocus,
       blur: handleBlur,
       mouseup: handleMouseup,
       mousedown: () => {
-        window.getSelection()?.removeAllRanges()
         hideMenuInstance()
       },
       keydown: hideMenuInstance,
-      input: handleInput,
     },
   }, {
     placeholder: '点击输入演讲者备注',
@@ -192,7 +198,6 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  handleInput.flush()
   mainStore.setDisableHotkeysState(false)
   menuInstance.value?.destroy()
   editorView && editorView.destroy()

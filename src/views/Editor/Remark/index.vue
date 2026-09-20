@@ -6,18 +6,20 @@
     ></div>
     <Editor
       v-if="expanded"
+      :key="currentSlide.id"
       :value="remark"
       ref="editorRef"
       @update="value => handleInput(value)"
     />
-    <div class="collapsed" v-else>演讲者备注{{ remark ? '（已填写）' : '' }}</div>
+    <button class="collapsed" v-else @click="expand">演讲者备注{{ remark ? '（已填写，点击编辑）' : '（点击添加）' }}</button>
   </div>
 </template>
 
 <script lang="ts" setup>
-import { computed, nextTick, useTemplateRef, watch } from 'vue'
+import { computed, nextTick, useTemplateRef } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useSlidesStore } from '@/store'
+import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 
 import Editor from './Editor.vue'
 
@@ -31,22 +33,22 @@ const emit = defineEmits<{
 
 const slidesStore = useSlidesStore()
 const { currentSlide } = storeToRefs(slidesStore)
+const { addHistorySnapshot } = useHistorySnapshot()
 
 const expanded = computed(() => props.height > 48)
 const editorRef = useTemplateRef<InstanceType<typeof Editor>>('editorRef')
-watch([() => currentSlide.value?.id, expanded], ([, isExpanded]) => {
-  if (!isExpanded) return
-  nextTick(() => {
-    editorRef.value?.updateTextContent()
-  })
-}, {
-  immediate: true,
-})
+const expand = async () => {
+  emit('update:height', 160)
+  await nextTick()
+  editorRef.value?.focus()
+}
 
 const remark = computed(() => currentSlide.value?.remark || '')
 
 const handleInput = (content: string) => {
+  if (content === remark.value) return
   slidesStore.updateSlide({ remark: content })
+  addHistorySnapshot()
 }
 
 const resize = (e: MouseEvent) => {
@@ -91,12 +93,16 @@ const resize = (e: MouseEvent) => {
   z-index: 2;
 }
 .collapsed {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
   height: 100%;
   padding: 0 10px;
   display: flex;
   align-items: center;
   color: #888;
   font-size: 12px;
-  cursor: n-resize;
+  cursor: pointer;
 }
 </style>
